@@ -27,19 +27,19 @@ const getValidImageUrl = (url: string): string => {
 export const comparisonTableSchema = z.object({
   products: z.array(
     z.object({
-      id: z.string().default(""),
-      name: z.string().default("Product"),
-      price: z.number().default(0),
-      image: z.string().default("https://picsum.photos/seed/default/200/200"),
+      id: z.string().nullable().default(""),
+      name: z.string().nullable().default("Product"),
+      price: z.number().nullable().default(0),
+      image: z.string().nullable().default("https://picsum.photos/seed/default/200/200"),
       features: z.array(
         z.object({
-          key: z.string(),
-          value: z.union([z.string(), z.boolean(), z.number()]),
+          key: z.string().nullable().default(""),
+          value: z.union([z.string(), z.boolean(), z.number()]).nullable().default(""),
         })
-      ).default([]),
+      ).nullable().default([]),
     })
-  ).default([]),
-  title: z.string().optional(),
+  ).nullable().default([]),
+  title: z.string().nullable().optional(),
 });
 
 type ComparisonTableProps = z.infer<typeof comparisonTableSchema>;
@@ -68,10 +68,13 @@ export function ComparisonTable({
   };
 
   return (
-    <div className="w-full space-y-4">
-      <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse bg-white shadow-lg rounded-lg overflow-hidden">
+    <div className="w-full space-y-6 p-4">
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-1 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full"></div>
+        <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">{title}</h2>
+      </div>
+      <div className="overflow-x-auto rounded-2xl border border-gray-200 shadow-xl">
+        <table className="w-full border-collapse bg-white">
           <thead>
             <tr className="bg-gray-50">
               <th className="p-4 text-left font-semibold text-gray-700 border-b">

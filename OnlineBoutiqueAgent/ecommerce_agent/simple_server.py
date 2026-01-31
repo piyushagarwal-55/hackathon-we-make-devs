@@ -88,10 +88,45 @@ async def chat(request: ChatRequest):
             }
         
         context = sessions[session_id]
-        user_message = request.message
+        user_message = request.message.lower()
         
-        # Search products
-        search_result = search_products(user_message)
+        # Check if user wants to view cart
+        cart_keywords = ['show cart', 'my cart', 'view cart', 'see cart', 'cart items', 'what\'s in my cart', 'whats in my cart']
+        if any(keyword in user_message for keyword in cart_keywords):
+            # Get cart items
+            cart_items = global_cart.get(session_id, [])
+            total = sum(item['price'] * item['quantity'] for item in cart_items)
+            
+            # Format for CheckoutWizard
+            formatted_cart = []
+            for item in cart_items:
+                formatted_cart.append({
+                    'id': item.get('id', ''),
+                    'name': item.get('name', 'Product'),
+                    'price': item.get('price', 0),
+                    'quantity': item.get('quantity', 1),
+                    'image': item.get('image', 'https://picsum.photos/seed/cart/100/100')
+                })
+            
+            if cart_items:
+                agent_response = f"Here's your cart with {sum(item['quantity'] for item in cart_items)} item(s) totaling ${total:.2f}"
+            else:
+                agent_response = "Your cart is empty. Browse products to add items!"
+            
+            return ChatResponse(
+                agent_response=agent_response,
+                ui_component='CheckoutWizard',
+                ui_props={
+                    'cartItems': formatted_cart,
+                    'expressMode': False,
+                    'shippingCost': 0
+                },
+                ui_reason='Displaying cart contents',
+                context=context
+            )
+        
+        # Otherwise, search products
+        search_result = search_products(request.message)
         
         # Build response
         if search_result.get('status') == 'success':
@@ -104,7 +139,7 @@ async def chat(request: ChatRequest):
                 if len(products) > 3:
                     agent_response += f" and {len(products) - 3} more."
             else:
-                agent_response = f"No products found matching '{user_message}'. Try 'sunglasses', 'shirts', or 'shoes'."
+                agent_response = f"No products found matching '{request.message}'. Try 'sunglasses', 'shirts', or 'shoes'."
         else:
             agent_response = f"Error searching: {search_result.get('error_message', 'Unknown error')}"
             products = []
@@ -135,7 +170,7 @@ async def chat(request: ChatRequest):
         
         # Decide UI component
         ui_config = ui_engine.decide_ui_component(
-            user_message=user_message,
+            user_message=request.message,
             agent_response=agent_response,
             context=context
         )
@@ -251,15 +286,32 @@ async def update_cart_quantity(request: dict):
 
 @app.get("/cart/{session_id}")
 async def get_cart(session_id: str):
-    """Get cart contents"""
+    """Get cart contents with UI component"""
     cart_items = global_cart.get(session_id, [])
     total = sum(item['price'] * item['quantity'] for item in cart_items)
+    
+    # Format as CheckoutWizard component data
+    formatted_cart = []
+    for item in cart_items:
+        formatted_cart.append({
+            'id': item.get('id', ''),
+            'name': item.get('name', 'Product'),
+            'price': item.get('price', 0),
+            'quantity': item.get('quantity', 1),
+            'image': item.get('image', 'https://picsum.photos/seed/cart/100/100')
+        })
     
     return {
         'status': 'success',
         'cart': cart_items,
         'total_items': sum(item['quantity'] for item in cart_items),
-        'total_price': total
+        'total_price': total,
+        'ui_component': 'CheckoutWizard',
+        'ui_props': {
+            'cartItems': formatted_cart,
+            'expressMode': False,
+            'shippingCost': 0
+        }
     }
 
 

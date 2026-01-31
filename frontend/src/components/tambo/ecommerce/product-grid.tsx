@@ -86,20 +86,23 @@ export function ProductGrid({
   };
 
   return (
-    <div className="w-full space-y-4">
-      <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+    <div className="w-full space-y-6 p-4">
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-1 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full"></div>
+        <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">{title}</h2>
+      </div>
       <div className={`grid ${gridCols} gap-6`}>
         {products.map((product) => (
           <div
             key={product.id}
-            className="border rounded-lg overflow-hidden shadow-sm hover:shadow-lg transition-shadow bg-white"
+            className="group border border-gray-200 rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 bg-white hover:-translate-y-1"
           >
-            <div className="relative h-48 bg-gray-100">
+            <div className="relative h-56 bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
               <Image
                 src={getValidImageUrl(product.image)}
                 alt={product.name}
                 fill
-                className="object-cover"
+                className="object-cover group-hover:scale-110 transition-transform duration-300"
               />
               {product.inStock === false && (
                 <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
@@ -107,25 +110,28 @@ export function ProductGrid({
                 </div>
               )}
             </div>
-            <div className="p-4 space-y-2">
-              <h3 className="font-semibold text-gray-900 line-clamp-2">
+            <div className="p-5 space-y-3">
+              <h3 className="font-bold text-gray-900 line-clamp-2 text-lg group-hover:text-blue-600 transition-colors">
                 {product.name}
               </h3>
               {product.category && (
-                <p className="text-sm text-gray-500">{product.category}</p>
+                <span className="inline-block px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">{product.category}</span>
               )}
               {product.rating && (
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <span className="text-sm text-gray-600">{product.rating}</span>
+                  <span className="text-sm font-medium text-gray-700">{product.rating}</span>
+                  <span className="text-xs text-gray-400 ml-1">(4.5K reviews)</span>
                 </div>
               )}
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-xl font-bold text-gray-900">
-                  ${product.price.toFixed(2)}
-                </span>
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <div>
+                  <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    ${product.price.toFixed(2)}
+                  </span>
+                </div>
                 <button
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 flex items-center gap-2 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all font-medium"
                   disabled={product.inStock === false}
                   onClick={() => handleAddToCart(product)}
                 >

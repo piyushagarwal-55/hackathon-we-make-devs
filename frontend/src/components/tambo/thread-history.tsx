@@ -420,11 +420,21 @@ const ThreadHistoryList = React.forwardRef<
     if (!threads?.items) return [];
 
     const query = searchQuery.toLowerCase();
-    return threads.items.filter((thread: TamboThread) => {
+    const filtered = threads.items.filter((thread: TamboThread) => {
       const nameMatches = thread.name?.toLowerCase().includes(query) ?? false;
       const idMatches = thread.id.toLowerCase().includes(query);
 
       return idMatches ? true : nameMatches;
+    });
+
+    // Deduplicate by thread ID to prevent duplicate key errors
+    const seen = new Set<string>();
+    return filtered.filter((thread: TamboThread) => {
+      if (seen.has(thread.id)) {
+        return false;
+      }
+      seen.add(thread.id);
+      return true;
     });
   }, [isCollapsed, threads, searchQuery]);
 

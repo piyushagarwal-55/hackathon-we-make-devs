@@ -143,19 +143,34 @@ export const tools: TamboTool[] = [
   {
     name: "viewCart",
     description:
-      "View shopping cart contents. Use when user says 'show cart', 'what's in my cart', 'view cart', 'my cart', etc.",
+      "View shopping cart contents with visual checkout interface. Use when user says 'show cart', 'what's in my cart', 'view cart', 'my cart', etc. This will display the cart visually using CheckoutWizard component.",
     tool: async () => {
       try {
-        const response = await fetch(`${BACKEND_URL}/cart/default`);
+        // Call the /chat endpoint with cart query to trigger CheckoutWizard component
+        const response = await fetch(`${BACKEND_URL}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            message: 'show my cart', 
+            session_id: 'default' 
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Backend returned ${response.status}`);
+        }
+        
         const data = await response.json();
         
+        // Return the data exactly as the chat endpoint provides it
         return {
-          cart: data.cart || [],
-          total_items: data.total_items || 0,
-          total_price: data.total_price || 0,
-          message: data.cart?.length > 0 
-            ? `You have ${data.total_items} items in your cart` 
-            : 'Your cart is empty',
+          cart: data.ui_props?.cartItems || [],
+          total_items: data.ui_props?.cartItems?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0,
+          total_price: data.ui_props?.cartItems?.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) || 0,
+          agent_response: data.agent_response,
+          ui_component: data.ui_component,
+          ui_props: data.ui_props,
+          message: data.agent_response,
         };
       } catch (error) {
         console.error('View cart failed:', error);
@@ -178,6 +193,9 @@ export const tools: TamboTool[] = [
       })).default([]),
       total_items: z.number().default(0),
       total_price: z.number().default(0),
+      agent_response: z.string().optional(),
+      ui_component: z.string().nullable().optional(),
+      ui_props: z.any().optional(),
       message: z.string(),
     }),
   },
