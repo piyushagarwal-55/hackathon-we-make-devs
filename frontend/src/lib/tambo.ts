@@ -32,6 +32,9 @@ import { BundleBuilder, bundleBuilderSchema } from "@/components/tambo/ecommerce
 import { CheckoutWizard, checkoutWizardSchema } from "@/components/tambo/ecommerce/checkout-wizard";
 import { SmartCartOptimizer, smartCartOptimizerSchema } from "@/components/tambo/ecommerce/smart-cart-optimizer";
 import { PriceTrendChart, priceTrendChartSchema } from "@/components/tambo/ecommerce/price-trend-chart";
+import { LoginForm, loginFormSchema } from "@/components/tambo/ecommerce/login-form";
+import { SignupForm, signupFormSchema } from "@/components/tambo/ecommerce/signup-form";
+import { OrderHistory, orderHistorySchema } from "@/components/tambo/ecommerce/order-history";
 
 /**
  * tools
@@ -98,9 +101,15 @@ export const tools: TamboTool[] = [
       "Add product(s) to shopping cart. Use when user says 'add to cart', 'add 3 sunglasses', 'put in cart', etc. Supports quantity specification.",
     tool: async ({ productId, productName, price, image, quantity }: { productId: string; productName: string; price: number; image: string; quantity: number }) => {
       try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
         const response = await fetch(`${BACKEND_URL}/cart/add`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             session_id: 'default',
             product_id: productId,
@@ -112,11 +121,27 @@ export const tools: TamboTool[] = [
         });
         
         const data = await response.json();
+        
+        if (response.status === 401) {
+          return {
+            success: false,
+            message: data.detail || 'Please login to add items to cart',
+            requires_auth: true,
+          };
+        }
+        
+        if (!response.ok) {
+          return {
+            success: false,
+            message: data.detail || 'Failed to add to cart',
+          };
+        }
+        
         return {
           success: true,
           cart: data.cart || [],
           total_items: data.total_items || 0,
-          message: `Added ${quantity} ${productName} to cart`,
+          message: data.message || `Added ${quantity} ${productName} to cart`,
         };
       } catch (error) {
         console.error('Add to cart failed:', error);
@@ -138,6 +163,7 @@ export const tools: TamboTool[] = [
       cart: z.array(z.any()).optional(),
       total_items: z.number().optional(),
       message: z.string(),
+      requires_auth: z.boolean().optional(),
     }),
   },
   {
@@ -146,10 +172,16 @@ export const tools: TamboTool[] = [
       "View shopping cart contents with visual checkout interface. Use when user says 'show cart', 'what's in my cart', 'view cart', 'my cart', etc. This will display the cart visually using CheckoutWizard component.",
     tool: async () => {
       try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
         // Call the /chat endpoint with cart query to trigger CheckoutWizard component
         const response = await fetch(`${BACKEND_URL}/chat`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ 
             message: 'show my cart', 
             session_id: 'default' 
@@ -162,15 +194,11 @@ export const tools: TamboTool[] = [
         
         const data = await response.json();
         
-        // Return the data exactly as the chat endpoint provides it
+        // Return the ui_component from backend (CheckoutWizard)
         return {
-          cart: data.ui_props?.cartItems || [],
-          total_items: data.ui_props?.cartItems?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0,
-          total_price: data.ui_props?.cartItems?.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0) || 0,
-          agent_response: data.agent_response,
+          agent_response: data.agent_response || '',
           ui_component: data.ui_component,
           ui_props: data.ui_props,
-          message: data.agent_response,
         };
       } catch (error) {
         console.error('View cart failed:', error);
@@ -184,19 +212,9 @@ export const tools: TamboTool[] = [
     },
     inputSchema: z.object({}),
     outputSchema: z.object({
-      cart: z.array(z.object({
-        id: z.string(),
-        name: z.string(),
-        price: z.number(),
-        image: z.string(),
-        quantity: z.number(),
-      })).default([]),
-      total_items: z.number().default(0),
-      total_price: z.number().default(0),
-      agent_response: z.string().optional(),
+      agent_response: z.string(),
       ui_component: z.string().nullable().optional(),
       ui_props: z.any().optional(),
-      message: z.string(),
     }),
   },
   {
@@ -287,6 +305,12 @@ export const tools: TamboTool[] = [
       "Process checkout and place order with shipping information. Extract name, address, city, zip, and email from user's message. Use when user provides shipping details like 'checkout to John Doe, 123 Main St, New York, 10001, john@email.com' or 'ship to Sarah Lee, 456 Oak Ave, Boston, 02101'.",
     tool: async ({ name, address, city, zip, email }: { name: string; address: string; city: string; zip: string; email?: string }) => {
       try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
         const shippingInfo = {
           name,
           address,
@@ -297,7 +321,7 @@ export const tools: TamboTool[] = [
         
         const response = await fetch(`${BACKEND_URL}/checkout`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             session_id: 'default',
             shipping_info: shippingInfo,
@@ -305,6 +329,13 @@ export const tools: TamboTool[] = [
         });
         
         const data = await response.json();
+        
+        if (response.status === 401) {
+          return {
+            success: false,
+            message: 'Please login to complete checkout',
+          };
+        }
         
         if (data.status === 'error') {
           return {
@@ -352,26 +383,102 @@ export const tools: TamboTool[] = [
     }),
   },
   {
-    name: "exportOrders",
+    name: "viewOrderDetails",
     description:
-      "Export order to PDF document. Use when user says 'export to PDF', 'download PDF', 'generate PDF', 'export order', etc.",
+      "View detailed order information. Use when user asks 'show order details', 'order info', 'what did I order', 'my orders', 'order history', etc.",
     tool: async () => {
       try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        const response = await fetch(`${BACKEND_URL}/chat`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ 
+            message: 'show order history', 
+            session_id: 'default' 
+          }),
+        });
+        
+        if (response.status === 401) {
+          return {
+            orders: [],
+            message: 'Please login to view order details',
+          };
+        }
+        
+        if (!response.ok) {
+          throw new Error(`Backend returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        return {
+          orders: data.ui_props?.orders || [],
+          agent_response: data.agent_response || '',
+          ui_component: data.ui_component,
+        };
+      } catch (error) {
+        console.error('View order details failed:', error);
+        return {
+          orders: [],
+          message: 'Failed to load order details',
+        };
+      }
+    },
+    inputSchema: z.object({}),
+    outputSchema: z.object({
+      orders: z.array(z.object({
+        orderId: z.string(),
+        date: z.string(),
+        items: z.array(z.any()),
+        total: z.number(),
+        status: z.string(),
+      })).default([]),
+      agent_response: z.string().optional(),
+      ui_component: z.string().nullable().optional(),
+      message: z.string().optional(),
+    }),
+  },
+  {
+    name: "exportOrders",
+    description:
+      "Export order to PDF document. Use when user says 'export to PDF', 'download PDF', 'generate PDF', 'export order', 'download receipt', 'receipt', 'order receipt', etc.",
+    tool: async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
         const response = await fetch(`${BACKEND_URL}/export/pdf`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ session_id: 'default' }),
         });
         
         if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
           return {
             success: false,
-            message: 'No orders available to export',
+            message: `Failed to generate PDF: ${errorData.detail || response.statusText}`,
           };
         }
         
         // Get PDF blob
         const blob = await response.blob();
+        
+        // Verify it's actually a PDF
+        if (blob.size === 0 || blob.type !== 'application/pdf') {
+          return {
+            success: false,
+            message: 'Invalid PDF received from server',
+          };
+        }
         
         // Create download link
         const url = window.URL.createObjectURL(blob);
@@ -387,11 +494,11 @@ export const tools: TamboTool[] = [
           success: true,
           message: '✅ PDF downloaded successfully! Check your Downloads folder.',
         };
-      } catch (error) {
+      } catch (error: any) {
         console.error('Export failed:', error);
         return {
           success: false,
-          message: 'Failed to export PDF. Make sure you have placed an order first.',
+          message: `Failed to export PDF: ${error.message || 'Unknown error'}`,
         };
       }
     },
@@ -542,5 +649,26 @@ export const components: TamboComponent[] = [
       "90-day price history chart with trend analysis and deal alerts. Use when user asks about price history, trends, if it's a good deal, or when prices were lower.",
     component: PriceTrendChart,
     propsSchema: priceTrendChartSchema,
+  },
+  {
+    name: "LoginForm",
+    description:
+      "User login form. Use when user needs to login, authenticate, or access protected features like checkout or order history.",
+    component: LoginForm,
+    propsSchema: loginFormSchema,
+  },
+  {
+    name: "SignupForm",
+    description:
+      "User registration form. Use when user wants to create account, sign up, or register.",
+    component: SignupForm,
+    propsSchema: signupFormSchema,
+  },
+  {
+    name: "OrderHistory",
+    description:
+      "Display user's past orders with details. Use when user wants to see order history, past purchases, or previous orders.",
+    component: OrderHistory,
+    propsSchema: orderHistorySchema,
   },
 ];

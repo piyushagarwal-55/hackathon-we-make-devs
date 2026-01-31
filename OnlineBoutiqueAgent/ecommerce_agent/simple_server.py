@@ -3,7 +3,7 @@ Simplified FastAPI server for E-commerce Agent
 Directly uses product search functions without complex agent orchestration
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -22,6 +22,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agents.product_finder_agent.agent import search_products, get_product_details
 from agents.export_agent.agent import generate_order_pdf
 from tambo_ui_engine import TamboUIDecisionEngine
+
+# Import database and auth
+try:
+    from database import User, Cart, Order, db
+    from auth import hash_password, verify_password, create_access_token, decode_access_token
+    MONGODB_ENABLED = True
+    print("✅ MongoDB enabled - authentication and database features active")
+except Exception as e:
+    if "MONGODB_NOT_CONFIGURED" in str(e):
+        print("⚠️ MongoDB disabled - using in-memory storage")
+        print("   To enable database features, update MONGODB_URI in .env")
+    else:
+        print(f"⚠️ MongoDB disabled due to error: {e}")
+    MONGODB_ENABLED = False
 
 app = FastAPI(
     title="Cymbal Shops E-commerce API",
@@ -46,6 +60,7 @@ sessions: Dict[str, Dict] = {}
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
+    user_id: Optional[str] = None  # Added for authenticated users
 
 
 class ChatResponse(BaseModel):
@@ -56,12 +71,73 @@ class ChatResponse(BaseModel):
     context: Dict[str, Any]
 
 
+class SignupRequest(BaseModel):
+    email: str
+    username: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    status: str
+    token: str
+    user: Dict[str, Any]
+    message: str
+
+
+app = FastAPI(
+    title="Cymbal Shops E-commerce API",
+    description="Backend API with Tambo Generative UI",
+    version="1.0.0"
+)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize
+ui_engine = TamboUIDecisionEngine()
+sessions: Dict[str, Dict] = {}
+
+
+def get_current_user(authorization: Optional[str] = None) -> Optional[dict]:
+    """Get current user from authorization header"""
+    if not MONGODB_ENABLED or not authorization:
+        return None
+    
+    try:
+        # Extract token from "Bearer <token>"
+        if not authorization.startswith("Bearer "):
+            return None
+        
+        token = authorization.replace("Bearer ", "")
+        payload = decode_access_token(token)
+        
+        if not payload:
+            return None
+        
+        user = User.find_by_id(payload.get("sub"))
+        return user
+    except:
+        return None
+
+
 @app.get("/")
 async def root():
     return {
         "status": "running",
         "service": "Cymbal Shops E-commerce API",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "mongodb_enabled": MONGODB_ENABLED
     }
 
 
@@ -74,10 +150,11 @@ async def health():
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, authorization: Optional[str] = Header(None)):
     """Process chat message and return UI component"""
     try:
         session_id = request.session_id or f"session_{hash(request.message)}"
+        user_id = request.user_id
         
         # Initialize session
         if session_id not in sessions:
@@ -90,11 +167,114 @@ async def chat(request: ChatRequest):
         context = sessions[session_id]
         user_message = request.message.lower()
         
+        # Check if user wants to login
+        login_keywords = ['login', 'log in', 'sign in', 'signin']
+        if any(keyword in user_message for keyword in login_keywords) and 'create' not in user_message and 'signup' not in user_message:
+            return ChatResponse(
+                agent_response="Please login to your account to continue shopping and checkout.",
+                ui_component='LoginForm',
+                ui_props={},
+                ui_reason='User requested login',
+                context=context
+            )
+        
+        # Check if user wants to signup
+        signup_keywords = ['signup', 'sign up', 'create account', 'register', 'new account']
+        if any(keyword in user_message for keyword in signup_keywords):
+            return ChatResponse(
+                agent_response="Create your account to start shopping and save your cart!",
+                ui_component='SignupForm',
+                ui_props={},
+                ui_reason='User requested signup',
+                context=context
+            )
+        
+        # Check if user wants to view order history
+        order_keywords = ['order history', 'my orders', 'past orders', 'previous orders', 'show orders']
+        if any(keyword in user_message for keyword in order_keywords):
+            if MONGODB_ENABLED:
+                user = get_current_user(authorization)
+                if not user:
+                    return ChatResponse(
+                        agent_response="You need to login to view your order history. Please login or create an account.",
+                        ui_component='LoginForm',
+                        ui_props={
+                            'message': 'Login to view your order history'
+                        },
+                        ui_reason='Order history requires authentication',
+                        context=context
+                    )
+                
+                # Get user orders
+                orders = Order.get_user_orders(user["_id"])
+                
+                formatted_orders = []
+                for order in orders:
+                    formatted_orders.append({
+                        'orderId': order['_id'][:8],
+                        'date': order['created_at'].strftime("%Y-%m-%d %H:%M:%S"),
+                        'items': order['items'],
+                        'total': order['total'],
+                        'status': order['status']
+                    })
+                
+                if orders:
+                    agent_response = f"Here are your {len(orders)} past orders:"
+                else:
+                    agent_response = "You don't have any orders yet. Start shopping!"
+                
+                return ChatResponse(
+                    agent_response=agent_response,
+                    ui_component='OrderHistory',
+                    ui_props={
+                        'orders': formatted_orders
+                    },
+                    ui_reason='Displaying order history',
+                    context=context
+                )
+            else:
+                orders = order_history.get(session_id, [])
+                formatted_orders = []
+                for order in orders:
+                    formatted_orders.append({
+                        'orderId': order['order_id'],
+                        'date': order['date'],
+                        'items': order['items'],
+                        'total': order['total'],
+                        'status': order['status']
+                    })
+                
+                return ChatResponse(
+                    agent_response=f"Here are your {len(formatted_orders)} past orders:" if orders else "You don't have any orders yet.",
+                    ui_component='OrderHistory',
+                    ui_props={
+                        'orders': formatted_orders
+                    },
+                    ui_reason='Displaying order history',
+                    context=context
+                )
+        
         # Check if user wants to view cart
         cart_keywords = ['show cart', 'my cart', 'view cart', 'see cart', 'cart items', 'what\'s in my cart', 'whats in my cart']
         if any(keyword in user_message for keyword in cart_keywords):
-            # Get cart items
-            cart_items = global_cart.get(session_id, [])
+            if MONGODB_ENABLED:
+                user = get_current_user(authorization)
+                if not user:
+                    return ChatResponse(
+                        agent_response="Please login to view your cart.",
+                        ui_component='LoginForm',
+                        ui_props={},
+                        ui_reason='Cart requires authentication',
+                        context=context
+                    )
+                
+                # Get user cart from MongoDB
+                cart = Cart.get_or_create(user["_id"])
+                cart_items = cart['items']
+            else:
+                # Get cart items from memory
+                cart_items = global_cart.get(session_id, [])
+            
             total = sum(item['price'] * item['quantity'] for item in cart_items)
             
             # Format for CheckoutWizard
@@ -190,6 +370,107 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@app.post("/auth/signup", response_model=AuthResponse)
+async def signup(request: SignupRequest):
+    """Create a new user account"""
+    if not MONGODB_ENABLED:
+        raise HTTPException(status_code=503, detail="MongoDB not configured")
+    
+    try:
+        # Check if user already exists
+        if User.find_by_email(request.email):
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        if User.find_by_username(request.username):
+            raise HTTPException(status_code=400, detail="Username already taken")
+        
+        # Create user
+        hashed_pwd = hash_password(request.password)
+        user = User.create(
+            email=request.email,
+            username=request.username,
+            hashed_password=hashed_pwd
+        )
+        
+        # Generate token
+        token = create_access_token(user["_id"], user["email"])
+        
+        return AuthResponse(
+            status="success",
+            token=token,
+            user={
+                "id": user["_id"],
+                "email": user["email"],
+                "username": user["username"]
+            },
+            message=f"Welcome {user['username']}! Your account has been created."
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+async def login(request: LoginRequest):
+    """Login to existing account"""
+    if not MONGODB_ENABLED:
+        raise HTTPException(status_code=503, detail="MongoDB not configured")
+    
+    try:
+        # Find user
+        user = User.find_by_email(request.email)
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Verify password
+        if not verify_password(request.password, user["password"]):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Generate token
+        token = create_access_token(user["_id"], user["email"])
+        
+        return AuthResponse(
+            status="success",
+            token=token,
+            user={
+                "id": user["_id"],
+                "email": user["email"],
+                "username": user["username"]
+            },
+            message=f"Welcome back, {user['username']}!"
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/auth/me")
+async def get_me(authorization: Optional[str] = Header(None)):
+    """Get current user info"""
+    if not MONGODB_ENABLED:
+        raise HTTPException(status_code=503, detail="MongoDB not configured")
+    
+    user = get_current_user(authorization)
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return {
+        "id": user["_id"],
+        "email": user["email"],
+        "username": user["username"]
+    }
+
+
 @app.get("/components")
 async def list_components():
     return {
@@ -198,61 +479,109 @@ async def list_components():
     }
 
 
-# Global cart storage (persistent across sessions)
+# Global cart storage (fallback for non-MongoDB mode)
 global_cart: Dict[str, List[Dict]] = {}
 
-# Global order history (persistent across chats, cleared on server restart)
+# Global order history (fallback for non-MongoDB mode)
 order_history: Dict[str, List[Dict]] = {}
 
 
+# ============================================================================
+# CART ENDPOINTS
+# ============================================================================
+
 @app.post("/cart/add")
-async def add_to_cart(request: dict):
+async def add_to_cart(request: dict, authorization: Optional[str] = Header(None)):
     """Add item(s) to cart"""
     try:
-        session_id = request.get('session_id', 'default')
         product_id = request.get('product_id')
         quantity = request.get('quantity', 1)
         product_name = request.get('product_name', 'Product')
         price = request.get('price', 0)
         image = request.get('image', '')
         
-        if session_id not in global_cart:
-            global_cart[session_id] = []
-        
-        # Check if product already in cart
-        existing_item = next((item for item in global_cart[session_id] if item['id'] == product_id), None)
-        
-        if existing_item:
-            existing_item['quantity'] += quantity
-        else:
-            global_cart[session_id].append({
+        if MONGODB_ENABLED:
+            # Get current user
+            user = get_current_user(authorization)
+            if not user:
+                raise HTTPException(status_code=401, detail="Please login to add items to cart")
+            
+            user_id = user["_id"]
+            
+            # Add to MongoDB cart
+            item = {
                 'id': product_id,
                 'name': product_name,
                 'price': price,
                 'image': image,
                 'quantity': quantity
-            })
-        
-        return {
-            'status': 'success',
-            'cart': global_cart[session_id],
-            'total_items': sum(item['quantity'] for item in global_cart[session_id])
-        }
+            }
+            cart = Cart.add_item(user_id, item)
+            
+            return {
+                'status': 'success',
+                'cart': cart['items'],
+                'total_items': sum(item['quantity'] for item in cart['items']),
+                'message': f'Added {product_name} to your cart'
+            }
+        else:
+            # Fallback to in-memory cart
+            session_id = request.get('session_id', 'default')
+            
+            if session_id not in global_cart:
+                global_cart[session_id] = []
+            
+            # Check if product already in cart
+            existing_item = next((item for item in global_cart[session_id] if item['id'] == product_id), None)
+            
+            if existing_item:
+                existing_item['quantity'] += quantity
+            else:
+                global_cart[session_id].append({
+                    'id': product_id,
+                    'name': product_name,
+                    'price': price,
+                    'image': image,
+                    'quantity': quantity
+                })
+            
+            return {
+                'status': 'success',
+                'cart': global_cart[session_id],
+                'total_items': sum(item['quantity'] for item in global_cart[session_id])
+            }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/cart/remove")
-async def remove_from_cart(request: dict):
+async def remove_from_cart(request: dict, authorization: Optional[str] = Header(None)):
     """Remove item from cart"""
     try:
-        session_id = request.get('session_id', 'default')
         product_id = request.get('product_id')
         
-        if session_id in global_cart:
-            global_cart[session_id] = [item for item in global_cart[session_id] if item['id'] != product_id]
-        
-        return {
+        if MONGODB_ENABLED:
+            user = get_current_user(authorization)
+            if not user:
+                raise HTTPException(status_code=401, detail="Please login to modify cart")
+            
+            user_id = user["_id"]
+            cart = Cart.remove_item(user_id, product_id)
+            
+            return {
+                'status': 'success',
+                'cart': cart['items'],
+                'total_items': sum(item['quantity'] for item in cart['items'])
+            }
+        else:
+            session_id = request.get('session_id', 'default')
+            
+            if session_id in global_cart:
+                global_cart[session_id] = [item for item in global_cart[session_id] if item['id'] != product_id]
+            
+            return {
             'status': 'success',
             'cart': global_cart.get(session_id, [])
         }
@@ -285,9 +614,27 @@ async def update_cart_quantity(request: dict):
 
 
 @app.get("/cart/{session_id}")
-async def get_cart(session_id: str):
+async def get_cart(session_id: str, authorization: Optional[str] = Header(None)):
     """Get cart contents with UI component"""
-    cart_items = global_cart.get(session_id, [])
+    if MONGODB_ENABLED:
+        user = get_current_user(authorization)
+        if not user:
+            return {
+                'status': 'error',
+                'cart': [],
+                'total_items': 0,
+                'total_price': 0,
+                'message': 'Please login to view your cart',
+                'ui_component': 'LoginForm',
+                'ui_props': {}
+            }
+        
+        user_id = user["_id"]
+        cart = Cart.get_or_create(user_id)
+        cart_items = cart['items']
+    else:
+        cart_items = global_cart.get(session_id, [])
+    
     total = sum(item['price'] * item['quantity'] for item in cart_items)
     
     # Format as CheckoutWizard component data
@@ -361,90 +708,202 @@ async def recommend_products(request: dict):
 
 
 @app.post("/checkout")
-async def checkout(request: dict):
-    """Process checkout"""
+async def checkout(request: dict, authorization: Optional[str] = Header(None)):
+    """Process checkout - requires authentication"""
     try:
-        session_id = request.get('session_id', 'default')
         shipping_info = request.get('shipping_info', {})
         
-        print(f"🛒 CHECKOUT - Session: {session_id}")
-        print(f"📦 Cart items: {global_cart.get(session_id, [])}")
-        
-        cart_items = global_cart.get(session_id, [])
-        if not cart_items:
-            print("❌ Cart is empty!")
+        if MONGODB_ENABLED:
+            # Require authentication for checkout
+            user = get_current_user(authorization)
+            if not user:
+                return {
+                    'status': 'error',
+                    'message': 'Please login or create an account to checkout',
+                    'ui_component': 'LoginForm',
+                    'ui_props': {
+                        'message': 'You need to login to checkout. Please login or create an account.'
+                    }
+                }
+            
+            user_id = user["_id"]
+            
+            # Get user's cart
+            cart = Cart.get_or_create(user_id)
+            cart_items = cart['items']
+            
+            if not cart_items:
+                return {
+                    'status': 'error',
+                    'message': 'Cart is empty'
+                }
+            
+            total = sum(item['price'] * item['quantity'] for item in cart_items)
+            
+            # Create order in database
+            order = Order.create(
+                user_id=user_id,
+                items=cart_items,
+                shipping_info=shipping_info,
+                total=total
+            )
+            
+            # Clear cart
+            Cart.clear(user_id)
+            
             return {
-                'status': 'error',
-                'message': 'Cart is empty'
+                'status': 'success',
+                'order': {
+                    'order_id': order['_id'],
+                    'items': order['items'],
+                    'total': order['total'],
+                    'shipping_info': order['shipping_info'],
+                    'status': order['status'],
+                    'date': order['created_at'].strftime("%Y-%m-%d %H:%M:%S")
+                },
+                'message': f'Order {order["_id"][:8]} placed successfully!'
             }
         
-        total = sum(item['price'] * item['quantity'] for item in cart_items)
-        
-        # Create order
-        order_id = f"ORD-{abs(hash(session_id + str(len(cart_items))))}"[-8:]
-        
-        order = {
-            'order_id': order_id,
-            'items': cart_items.copy(),  # Make a copy
-            'total': total,
-            'shipping_info': shipping_info,
-            'status': 'confirmed',
-            'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        
-        # Save to order history
-        if session_id not in order_history:
-            order_history[session_id] = []
-        order_history[session_id].append(order)
-        
-        print(f"✅ Order {order_id} saved! Total orders: {len(order_history[session_id])}")
-        print(f"📋 Order history: {order_history}")
-        
-        # Clear cart after checkout
-        global_cart[session_id] = []
-        
-        return {
-            'status': 'success',
-            'order': order,
-            'message': f'Order {order_id} placed successfully!'
-        }
+        else:
+            # Fallback to in-memory mode
+            session_id = request.get('session_id', 'default')
+            
+            cart_items = global_cart.get(session_id, [])
+            if not cart_items:
+                return {
+                    'status': 'error',
+                    'message': 'Cart is empty'
+                }
+            
+            total = sum(item['price'] * item['quantity'] for item in cart_items)
+            
+            # Create order
+            order_id = f"ORD-{abs(hash(session_id + str(len(cart_items))))}"[-8:]
+            
+            order = {
+                'order_id': order_id,
+                'items': cart_items.copy(),
+                'total': total,
+                'shipping_info': shipping_info,
+                'status': 'confirmed',
+                'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+            # Save to order history
+            if session_id not in order_history:
+                order_history[session_id] = []
+            order_history[session_id].append(order)
+            
+            # Clear cart after checkout
+            global_cart[session_id] = []
+            
+            return {
+                'status': 'success',
+                'order': order,
+                'message': f'Order {order_id} placed successfully!'
+            }
+    
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/orders/{session_id}")
-async def get_orders(session_id: str):
-    """Get order history for export"""
+async def get_orders(session_id: str, authorization: Optional[str] = Header(None)):
+    """Get order history for a user"""
     try:
-        print(f"📊 GET ORDERS - Session: {session_id}")
-        print(f"📋 Order history: {order_history}")
+        if MONGODB_ENABLED:
+            user = get_current_user(authorization)
+            if not user:
+                return {
+                    'status': 'error',
+                    'orders': [],
+                    'total_orders': 0,
+                    'message': 'Please login to view order history',
+                    'ui_component': 'LoginForm',
+                    'ui_props': {}
+                }
+            
+            user_id = user["_id"]
+            orders = Order.get_user_orders(user_id)
+            
+            # Format for UI
+            formatted_orders = []
+            for order in orders:
+                formatted_orders.append({
+                    'orderId': order['_id'][:8],
+                    'date': order['created_at'].strftime("%Y-%m-%d %H:%M:%S"),
+                    'items': order['items'],
+                    'total': order['total'],
+                    'status': order['status'],
+                    'shipping_info': order.get('shipping_info', {})
+                })
+            
+            return {
+                'status': 'success',
+                'orders': formatted_orders,
+                'total_orders': len(formatted_orders),
+                'ui_component': 'OrderHistory',
+                'ui_props': {
+                    'orders': formatted_orders
+                }
+            }
         
-        orders = order_history.get(session_id, [])
-        print(f"✅ Found {len(orders)} orders for session {session_id}")
-        
-        # Format for export
-        export_data = {
-            'total_orders': len(orders),
-            'orders': orders,
-            'export_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        
-        return export_data
+        else:
+            # Fallback to in-memory mode
+            orders = order_history.get(session_id, [])
+            
+            formatted_orders = []
+            for order in orders:
+                formatted_orders.append({
+                    'orderId': order['order_id'],
+                    'date': order['date'],
+                    'items': order['items'],
+                    'total': order['total'],
+                    'status': order['status'],
+                    'shipping_info': order.get('shipping_info', {})
+                })
+            return {
+                'status': 'success',
+                'orders': formatted_orders,
+                'total_orders': len(formatted_orders),
+                'ui_component': 'OrderHistory',
+                'ui_props': {
+                    'orders': formatted_orders
+                }
+            }
+    
     except Exception as e:
-        print(f"❌ Error getting orders: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/export/pdf")
-async def export_order_pdf(request: dict):
+async def export_order_pdf(request: dict, authorization: str = Header(None)):
     """Generate PDF for order using existing export_agent"""
     try:
         session_id = request.get('session_id', 'default')
         
         print(f"📄 EXPORT PDF - Session: {session_id}")
-        print(f"📋 Order history: {order_history}")
+        print(f"🔑 Authorization header: {authorization[:20] if authorization else 'None'}...")
+        print(f"🔧 MONGODB_ENABLED: {MONGODB_ENABLED}")
         
-        orders = order_history.get(session_id, [])
+        orders = []
+        
+        if MONGODB_ENABLED:
+            # Get orders from MongoDB
+            user = get_current_user(authorization)
+            if not user:
+                print("❌ User not authenticated!")
+                raise HTTPException(status_code=401, detail='Please login to export orders')
+            
+            print(f"✅ User authenticated: {user.get('email')}")
+            orders = Order.get_user_orders(user["_id"])
+            print(f"📋 MongoDB orders found: {len(orders)}")
+        else:
+            # Fallback to in-memory
+            orders = order_history.get(session_id, [])
+            print(f"📋 In-memory orders found: {len(orders)}")
         
         if not orders:
             print("❌ No orders found!")
@@ -468,9 +927,12 @@ async def export_order_pdf(request: dict):
         shipping = order.get('shipping_info', {})
         shipping_address = f"{shipping.get('name', 'N/A')}, {shipping.get('address', 'N/A')}, {shipping.get('city', 'N/A')} {shipping.get('zip', 'N/A')}"
         
+        # Get order ID (MongoDB uses _id, in-memory uses order_id)
+        order_id = order.get('order_id') or order.get('_id', 'N/A')
+        
         # Format order data to match export_agent expectations
         order_data = {
-            'order_number': order.get('order_id', 'N/A'),
+            'order_number': order_id,
             'items': formatted_items,
             'total_items': len(formatted_items),
             'shipping_address': shipping_address,
