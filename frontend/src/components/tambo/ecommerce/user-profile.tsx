@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { z } from "zod";
 
 const cartItemSchema = z.object({
@@ -48,9 +48,14 @@ export const userProfileSchema = z.object({
 type UserProfileProps = z.infer<typeof userProfileSchema>;
 
 export function UserProfile(props: UserProfileProps) {
-  const user = props?.user;
-  const cartItems = props?.cart_items || [];
-  const orders = props?.orders || [];
+  // State for profile data
+  const [profileData, setProfileData] = useState<UserProfileProps | null>(props);
+  const [fetchLoading, setFetchLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  
+  const user = profileData?.user;
+  const cartItems = profileData?.cart_items || [];
+  const orders = profileData?.orders || [];
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     full_name: user?.full_name || user?.username || "",
@@ -60,6 +65,92 @@ export function UserProfile(props: UserProfileProps) {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  // Fetch profile data if not provided in props
+  useEffect(() => {
+    const fetchProfile = async () => {
+      // If we have user data in props, use it
+      if (props?.user) {
+        setProfileData(props);
+        return;
+      }
+
+      console.log('📥 [UserProfile] No user data in props, fetching from backend...');
+      setFetchLoading(true);
+      setFetchError(null);
+
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        if (!token) {
+          setFetchError('Please login to view your profile');
+          return;
+        }
+
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch('http://localhost:8000/chat', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            message: 'show my profile',
+            session_id: 'default'
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch profile: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('✅ [UserProfile] Fetched profile data:', data.ui_props);
+        
+        if (data.ui_props) {
+          setProfileData(data.ui_props);
+        }
+      } catch (err) {
+        console.error('❌ [UserProfile] Failed to fetch profile:', err);
+        setFetchError('Failed to load profile data');
+      } finally {
+        setFetchLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [props]);
+
+  // Update edit form when user data changes
+  useEffect(() => {
+    if (user) {
+      setEditForm({
+        full_name: user.full_name || user.username || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        address: user.address || "",
+      });
+    }
+  }, [user]);
+
+  if (fetchLoading) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-card rounded-lg border border-border p-12 text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-card rounded-lg border border-red-300 p-6 text-center">
+          <p className="text-red-600">{fetchError}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (

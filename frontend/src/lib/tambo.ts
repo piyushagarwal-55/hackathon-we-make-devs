@@ -169,57 +169,6 @@ export const tools: TamboTool[] = [
     }),
   },
   {
-    name: "viewCart",
-    description:
-      "View shopping cart contents with visual checkout interface. Use when user says 'show cart', 'what's in my cart', 'view cart', 'my cart', etc. This will display the cart visually using CheckoutWizard component.",
-    tool: async () => {
-      try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        
-        // Call the /chat endpoint with cart query to trigger CheckoutWizard component
-        const response = await fetch(`${BACKEND_URL}/chat`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ 
-            message: 'show my cart', 
-            session_id: 'default' 
-          }),
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Backend returned ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        // Return the ui_component from backend (CheckoutWizard)
-        return {
-          agent_response: data.agent_response || '',
-          ui_component: data.ui_component,
-          ui_props: data.ui_props,
-        };
-      } catch (error) {
-        console.error('View cart failed:', error);
-        return {
-          cart: [],
-          total_items: 0,
-          total_price: 0,
-          message: 'Failed to load cart',
-        };
-      }
-    },
-    inputSchema: z.object({}),
-    outputSchema: z.object({
-      agent_response: z.string(),
-      ui_component: z.string().nullable().optional(),
-      ui_props: z.any().optional(),
-    }),
-  },
-  {
     name: "viewProfile",
     description:
       "View complete user profile with personal information, cart items, and order statistics. Use ONLY when user specifically asks for 'profile', 'my account', 'account details', 'account info', 'account settings'. Do NOT use for order history queries.",
