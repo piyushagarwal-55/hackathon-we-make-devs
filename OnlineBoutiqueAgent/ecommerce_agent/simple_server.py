@@ -328,6 +328,59 @@ async def chat(request: ChatRequest, authorization: Optional[str] = Header(None)
                     context=context
                 )
         
+        # Check if user wants to view cart (CHECK THIS BEFORE PROFILE!)
+        cart_keywords = ['show cart', 'my cart', 'view cart', 'see cart', 'cart items', 'what\'s in my cart', 'whats in my cart', 'show my cart', 'show me my cart', 'show me cart', 'display cart', 'display my cart']
+        if any(keyword in user_message for keyword in cart_keywords):
+            print(f"🛒 CART REQUEST DETECTED!")
+            if MONGODB_ENABLED:
+                user = get_current_user(authorization)
+                if not user:
+                    return ChatResponse(
+                        agent_response="Please login to view your cart.",
+                        ui_component='LoginForm',
+                        ui_props={},
+                        ui_reason='Cart requires authentication',
+                        context=context
+                    )
+                
+                # Get user cart from MongoDB
+                cart = Cart.get_or_create(user["_id"])
+                cart_items = cart['items']
+            else:
+                # Get cart items from memory
+                cart_items = global_cart.get(session_id, [])
+            
+            total = sum(item['price'] * item['quantity'] for item in cart_items)
+            
+            # Format for CheckoutWizard
+            formatted_cart = []
+            for item in cart_items:
+                formatted_cart.append({
+                    'id': item.get('id', ''),
+                    'name': item.get('name', 'Product'),
+                    'price': item.get('price', 0),
+                    'quantity': item.get('quantity', 1),
+                    'image': item.get('image', 'https://picsum.photos/seed/cart/100/100')
+                })
+            
+            if cart_items:
+                agent_response = f"Here's your cart with {sum(item['quantity'] for item in cart_items)} item(s) totaling ${total:.2f}"
+            else:
+                agent_response = "Your cart is empty. Browse products to add items!"
+            
+            print(f"✅ Returning CheckoutWizard with {len(formatted_cart)} items")
+            return ChatResponse(
+                agent_response=agent_response,
+                ui_component='CheckoutWizard',
+                ui_props={
+                    'cartItems': formatted_cart,
+                    'expressMode': False,
+                    'shippingCost': 0
+                },
+                ui_reason='Displaying cart contents',
+                context=context
+            )
+        
         # Check if user wants to view their profile
         profile_keywords = ['show my profile', 'view profile', 'my account', 'account details', 'profile page', 'my profile', 'view my profile', 'show profile']
         if any(keyword in user_message for keyword in profile_keywords):
@@ -421,57 +474,6 @@ async def chat(request: ChatRequest, authorization: Optional[str] = Header(None)
                     ui_reason='MongoDB not configured',
                     context=context
                 )
-        
-        # Check if user wants to view cart
-        cart_keywords = ['show cart', 'my cart', 'view cart', 'see cart', 'cart items', 'what\'s in my cart', 'whats in my cart']
-        if any(keyword in user_message for keyword in cart_keywords):
-            if MONGODB_ENABLED:
-                user = get_current_user(authorization)
-                if not user:
-                    return ChatResponse(
-                        agent_response="Please login to view your cart.",
-                        ui_component='LoginForm',
-                        ui_props={},
-                        ui_reason='Cart requires authentication',
-                        context=context
-                    )
-                
-                # Get user cart from MongoDB
-                cart = Cart.get_or_create(user["_id"])
-                cart_items = cart['items']
-            else:
-                # Get cart items from memory
-                cart_items = global_cart.get(session_id, [])
-            
-            total = sum(item['price'] * item['quantity'] for item in cart_items)
-            
-            # Format for CheckoutWizard
-            formatted_cart = []
-            for item in cart_items:
-                formatted_cart.append({
-                    'id': item.get('id', ''),
-                    'name': item.get('name', 'Product'),
-                    'price': item.get('price', 0),
-                    'quantity': item.get('quantity', 1),
-                    'image': item.get('image', 'https://picsum.photos/seed/cart/100/100')
-                })
-            
-            if cart_items:
-                agent_response = f"Here's your cart with {sum(item['quantity'] for item in cart_items)} item(s) totaling ${total:.2f}"
-            else:
-                agent_response = "Your cart is empty. Browse products to add items!"
-            
-            return ChatResponse(
-                agent_response=agent_response,
-                ui_component='CheckoutWizard',
-                ui_props={
-                    'cartItems': formatted_cart,
-                    'expressMode': False,
-                    'shippingCost': 0
-                },
-                ui_reason='Displaying cart contents',
-                context=context
-            )
         
         # Otherwise, search products
         search_result = search_products(request.message)

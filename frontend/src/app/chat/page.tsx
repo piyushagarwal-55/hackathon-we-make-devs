@@ -17,7 +17,7 @@ export default function Home() {
     <TamboProvider
       apiKey={process.env.NEXT_PUBLIC_TAMBO_API_KEY!}
       components={components}
-      tools={tools}
+
       tamboUrl={process.env.NEXT_PUBLIC_TAMBO_URL}
       mcpServers={mcpServers}
       agentBackendUrl={process.env.NEXT_PUBLIC_AGENT_BACKEND_URL || 'http://localhost:8000/chat'}
