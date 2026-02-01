@@ -152,9 +152,31 @@ async def health():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, authorization: Optional[str] = Header(None)):
     """Process chat message and return UI component"""
+    print('\n' + '='*100)
+    print('📨 [BACKEND] /chat endpoint called')
+    print('='*100)
+    print(f'📝 [REQUEST] Message: "{request.message}"')
+    print(f'🔑 [REQUEST] Session ID: {request.session_id}')
+    print(f'🔐 [REQUEST] Authorization header: {authorization[:50] if authorization else "❌ None"}...')
+    print(f'👤 [REQUEST] User ID: {request.user_id}')
+    
     try:
+        # Try to get user from authorization header OR from session_id (if it contains a token)
+        user = None
+        if MONGODB_ENABLED:
+            print(f'💾 [AUTH] MongoDB enabled - checking authentication...')
+            # First try authorization header
+            if authorization:
+                user = get_current_user(authorization)
+            
+            # If no user from header, try to decode session_id as token
+            if not user and request.session_id and request.session_id.startswith('user_'):
+                # Session ID format: user_{user_id}
+                user_id = request.session_id.replace('user_', '')
+                user = User.find_by_id(user_id)
+        
         session_id = request.session_id or f"session_{hash(request.message)}"
-        user_id = request.user_id
+        user_id = user["_id"] if user else None
         
         # Initialize session
         if session_id not in sessions:
@@ -191,10 +213,24 @@ async def chat(request: ChatRequest, authorization: Optional[str] = Header(None)
         
         # Check if user wants to view order history
         order_keywords = ['order history', 'my orders', 'past orders', 'previous orders', 'show orders']
-        if any(keyword in user_message for keyword in order_keywords):
+        print(f"🔍 CHECKING ORDER KEYWORDS in message: '{user_message}'")
+        print(f"🔍 Keywords to check: {order_keywords}")
+        keyword_match = any(keyword in user_message for keyword in order_keywords)
+        print(f"🔍 Keyword match result: {keyword_match}")
+        
+        if keyword_match:
+            print(f"✅ ORDER HISTORY REQUEST DETECTED!")
+            print(f"📊 MongoDB enabled: {MONGODB_ENABLED}")
+            print(f"🔑 Authorization header: {authorization[:50] if authorization else 'None'}...")
+            
             if MONGODB_ENABLED:
+                print(f"🔄 Getting current user from token...")
                 user = get_current_user(authorization)
+                print(f"👤 User retrieved: {user['email'] if user else 'None'}")
+                print(f"👤 User ID: {user['_id'] if user else 'None'}")
+                
                 if not user:
+                    print(f"❌ No user found - returning LoginForm")
                     return ChatResponse(
                         agent_response="You need to login to view your order history. Please login or create an account.",
                         ui_component='LoginForm',
@@ -206,22 +242,60 @@ async def chat(request: ChatRequest, authorization: Optional[str] = Header(None)
                     )
                 
                 # Get user orders
+                print(f"📥 Calling Order.get_user_orders for user_id: {user['_id']}")
                 orders = Order.get_user_orders(user["_id"])
+                print(f"📦 Raw orders count: {len(orders)}")
+                print(f"📦 Orders type: {type(orders)}")
                 
+                for idx, order in enumerate(orders):
+                    print(f"  📋 Order {idx + 1}:")
+                    print(f"     - ID: {order['_id']}")
+                    print(f"     - Items count: {len(order['items'])}")
+                    print(f"     - Total: ${order['total']}")
+                    print(f"     - Status: {order['status']}")
+                    print(f"     - Created: {order['created_at']}")
+                    print(f"     - Raw items: {order['items']}")
+                
+                print(f"🔄 Starting order formatting...")
                 formatted_orders = []
                 for order in orders:
+                    # Ensure items have proper structure
+                    formatted_items = []
+                    for item in order.get('items', []):
+                        formatted_items.append({
+                            'id': item.get('id', ''),
+                            'name': item.get('name', 'Unknown'),
+                            'price': item.get('price', 0),
+                            'quantity': item.get('quantity', 1),
+                            'image': item.get('image', '')
+                        })
+                    
                     formatted_orders.append({
                         'orderId': order['_id'][:8],
                         'date': order['created_at'].strftime("%Y-%m-%d %H:%M:%S"),
-                        'items': order['items'],
+                        'items': formatted_items,
                         'total': order['total'],
                         'status': order['status']
                     })
                 
+                print(f"✅ Formatted orders count: {len(formatted_orders)}")
+                print(f"📊 Full formatted_orders array:")
+                for idx, fo in enumerate(formatted_orders):
+                    print(f"   Order {idx + 1}: {fo}")
+                
                 if orders:
-                    agent_response = f"Here are your {len(orders)} past orders:"
+                    total_items = sum(len(o['items']) for o in orders)
+                    agent_response = f"Here are your {len(orders)} past order{'s' if len(orders) > 1 else ''}: {total_items} total items purchased."
+                    print(f"✅ Agent response: {agent_response}")
                 else:
                     agent_response = "You don't have any orders yet. Start shopping!"
+                    print(f"⚠️ No orders - empty response")
+                
+                print(f"📤 RETURNING ChatResponse:")
+                print(f"   - agent_response: {agent_response}")
+                print(f"   - ui_component: OrderHistory")
+                print(f"   - ui_props.orders length: {len(formatted_orders)}")
+                print(f"   - ui_props: {{'orders': {formatted_orders}}}")
                 
                 return ChatResponse(
                     agent_response=agent_response,
@@ -251,6 +325,100 @@ async def chat(request: ChatRequest, authorization: Optional[str] = Header(None)
                         'orders': formatted_orders
                     },
                     ui_reason='Displaying order history',
+                    context=context
+                )
+        
+        # Check if user wants to view their profile
+        profile_keywords = ['show my profile', 'view profile', 'my account', 'account details', 'profile page', 'my profile', 'view my profile', 'show profile']
+        if any(keyword in user_message for keyword in profile_keywords):
+            print(f"🔍 PROFILE REQUEST - MongoDB: {MONGODB_ENABLED}")
+            if MONGODB_ENABLED:
+                user = get_current_user(authorization)
+                print(f"👤 User from token: {user['email'] if user else 'None'}")
+                if not user:
+                    return ChatResponse(
+                        agent_response="You need to login to view your profile. Please login or create an account.",
+                        ui_component='LoginForm',
+                        ui_props={
+                            'message': 'Login to view your profile'
+                        },
+                        ui_reason='Profile requires authentication',
+                        context=context
+                    )
+                
+                # Get user profile data
+                try:
+                    user_id = user["_id"]
+                    
+                    # Get cart
+                    cart = Cart.get_or_create(user_id)
+                    cart_items = cart.get('items', [])
+                    
+                    # Get orders
+                    orders = Order.get_user_orders(user_id)
+                    
+                    # Format orders
+                    formatted_orders = []
+                    for order in orders:
+                        formatted_orders.append({
+                            'orderId': order['_id'][:8],
+                            'date': order['created_at'].strftime("%Y-%m-%d %H:%M:%S"),
+                            'items': order['items'],
+                            'total': order['total'],
+                            'status': order['status']
+                        })
+                    
+                    # Format cart items
+                    formatted_cart = []
+                    for item in cart_items:
+                        formatted_cart.append({
+                            'id': item.get('id', ''),
+                            'name': item.get('name', 'Product'),
+                            'price': item.get('price', 0),
+                            'quantity': item.get('quantity', 1),
+                            'image': item.get('image', 'https://picsum.photos/seed/cart/100/100')
+                        })
+                    
+                    profile_data = {
+                        'user': {
+                            'id': user['_id'],
+                            'email': user['email'],
+                            'username': user['username'],
+                            'full_name': user.get('full_name', user['username']),
+                            'phone': user.get('phone', ''),
+                            'address': user.get('address', ''),
+                            'created_at': user['created_at'].strftime("%Y-%m-%d %H:%M:%S") if 'created_at' in user else ''
+                        },
+                        'cart_items': formatted_cart,
+                        'orders': formatted_orders,
+                        'total_cart_items': sum(item['quantity'] for item in cart_items),
+                        'total_orders': len(formatted_orders)
+                    }
+                    
+                    print(f"📊 Profile data: User={user['email']}, Cart={len(cart_items)}, Orders={len(orders)}")
+                    
+                    return ChatResponse(
+                        agent_response=f"Here's your profile, {user.get('full_name', user['username'])}! You have {len(cart_items)} items in your cart and {len(orders)} past orders.",
+                        ui_component='UserProfile',
+                        ui_props=profile_data,
+                        ui_reason='Displaying user profile',
+                        context=context
+                    )
+                except Exception as e:
+                    print(f"❌ Error loading profile: {e}")
+                    return ChatResponse(
+                        agent_response="Sorry, there was an error loading your profile.",
+                        ui_component='LoginForm',
+                        ui_props={},
+                        ui_reason='Profile error',
+                        context=context
+                    )
+            else:
+                return ChatResponse(
+                    agent_response="Profile feature requires database connection. Please configure MongoDB.",
+                    ui_component='LoginForm',
+                    ui_props={},
+                    ui_reason='MongoDB not configured',
                     context=context
                 )
         
@@ -469,6 +637,131 @@ async def get_me(authorization: Optional[str] = Header(None)):
         "email": user["email"],
         "username": user["username"]
     }
+
+
+# ============================================================================
+# PROFILE ENDPOINTS
+# ============================================================================
+
+@app.get("/profile")
+async def get_profile(authorization: Optional[str] = Header(None)):
+    """Get user profile with cart and order history"""
+    if not MONGODB_ENABLED:
+        raise HTTPException(status_code=503, detail="MongoDB not configured")
+    
+    user = get_current_user(authorization)
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Please login to view your profile")
+    
+    try:
+        user_id = user["_id"]
+        
+        # Get cart
+        cart = Cart.get_or_create(user_id)
+        cart_items = cart.get('items', [])
+        
+        # Get orders
+        orders = Order.get_user_orders(user_id)
+        
+        # Format orders
+        formatted_orders = []
+        for order in orders:
+            formatted_orders.append({
+                'orderId': order['_id'][:8],
+                'date': order['created_at'].strftime("%Y-%m-%d %H:%M:%S"),
+                'items': order['items'],
+                'total': order['total'],
+                'status': order['status']
+            })
+        
+        # Format cart items
+        formatted_cart = []
+        for item in cart_items:
+            formatted_cart.append({
+                'id': item.get('id', ''),
+                'name': item.get('name', 'Product'),
+                'price': item.get('price', 0),
+                'quantity': item.get('quantity', 1),
+                'image': item.get('image', 'https://picsum.photos/seed/cart/100/100')
+            })
+        
+        return {
+            'status': 'success',
+            'user': {
+                'id': user['_id'],
+                'email': user['email'],
+                'username': user['username'],
+                'full_name': user.get('full_name', user['username']),
+                'phone': user.get('phone', ''),
+                'address': user.get('address', ''),
+                'created_at': user['created_at'].strftime("%Y-%m-%d %H:%M:%S") if 'created_at' in user else ''
+            },
+            'cart_items': formatted_cart,
+            'orders': formatted_orders,
+            'total_cart_items': sum(item['quantity'] for item in cart_items),
+            'total_orders': len(formatted_orders)
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/profile/update")
+async def update_profile(request: dict, authorization: Optional[str] = Header(None)):
+    """Update user profile information"""
+    if not MONGODB_ENABLED:
+        raise HTTPException(status_code=503, detail="MongoDB not configured")
+    
+    user = get_current_user(authorization)
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Please login to update your profile")
+    
+    try:
+        user_id = user["_id"]
+        updates = {}
+        
+        # Extract allowed fields from request
+        if 'full_name' in request:
+            updates['full_name'] = request['full_name']
+        if 'email' in request:
+            # Check if email already exists for another user
+            existing_user = User.find_by_email(request['email'])
+            if existing_user and existing_user['_id'] != user_id:
+                raise HTTPException(status_code=400, detail="Email already in use by another account")
+            updates['email'] = request['email']
+        if 'phone' in request:
+            updates['phone'] = request['phone']
+        if 'address' in request:
+            updates['address'] = request['address']
+        
+        if not updates:
+            raise HTTPException(status_code=400, detail="No valid fields to update")
+        
+        # Update user profile
+        updated_user = User.update_profile(user_id, updates)
+        
+        if not updated_user:
+            raise HTTPException(status_code=500, detail="Failed to update profile")
+        
+        return {
+            'status': 'success',
+            'message': 'Profile updated successfully',
+            'user': {
+                'id': updated_user['_id'],
+                'email': updated_user['email'],
+                'username': updated_user['username'],
+                'full_name': updated_user.get('full_name', updated_user['username']),
+                'phone': updated_user.get('phone', ''),
+                'address': updated_user.get('address', '')
+            }
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/components")
@@ -812,10 +1105,21 @@ async def checkout(request: dict, authorization: Optional[str] = Header(None)):
 @app.get("/orders/{session_id}")
 async def get_orders(session_id: str, authorization: Optional[str] = Header(None)):
     """Get order history for a user"""
+    print(f"\n{'='*80}")
+    print(f"📥 GET /orders/{session_id} endpoint called")
+    print(f"🔑 Authorization header: {authorization[:50] if authorization else 'None'}...")
+    print(f"📊 MongoDB enabled: {MONGODB_ENABLED}")
+    print(f"{'='*80}\n")
+    
     try:
         if MONGODB_ENABLED:
+            print(f"🔄 Getting current user from authorization token...")
             user = get_current_user(authorization)
+            print(f"👤 User retrieved: {user['email'] if user else 'None'}")
+            print(f"👤 User ID: {user['_id'] if user else 'None'}")
+            
             if not user:
+                print(f"❌ No user found - returning error response")
                 return {
                     'status': 'error',
                     'orders': [],
@@ -826,9 +1130,15 @@ async def get_orders(session_id: str, authorization: Optional[str] = Header(None
                 }
             
             user_id = user["_id"]
+            print(f"📥 Fetching orders for user_id: {user_id}")
             orders = Order.get_user_orders(user_id)
+            print(f"📦 Raw orders retrieved: {len(orders)}")
+            
+            for idx, order in enumerate(orders):
+                print(f"  📋 Raw Order {idx + 1}: ID={order['_id']}, Items={len(order.get('items', []))}, Total=${order.get('total', 0)}")
             
             # Format for UI
+            print(f"🔄 Formatting orders for UI...")
             formatted_orders = []
             for order in orders:
                 formatted_orders.append({

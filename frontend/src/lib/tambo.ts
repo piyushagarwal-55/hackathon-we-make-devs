@@ -35,6 +35,8 @@ import { PriceTrendChart, priceTrendChartSchema } from "@/components/tambo/ecomm
 import { LoginForm, loginFormSchema } from "@/components/tambo/ecommerce/login-form";
 import { SignupForm, signupFormSchema } from "@/components/tambo/ecommerce/signup-form";
 import { OrderHistory, orderHistorySchema } from "@/components/tambo/ecommerce/order-history";
+import { UserProfile, userProfileSchema } from "@/components/tambo/ecommerce/user-profile";
+
 
 /**
  * tools
@@ -218,6 +220,149 @@ export const tools: TamboTool[] = [
     }),
   },
   {
+    name: "viewProfile",
+    description:
+      "View complete user profile with personal information, cart items, and order statistics. Use ONLY when user specifically asks for 'profile', 'my account', 'account details', 'account info', 'account settings'. Do NOT use for order history queries.",
+    tool: async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        if (!token) {
+          return {
+            success: false,
+            message: 'Please login to view your profile',
+            requires_auth: true,
+          };
+        }
+        
+        const response = await fetch(`${BACKEND_URL}/profile`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        
+        if (response.status === 401) {
+          return {
+            success: false,
+            message: 'Please login to view your profile',
+            requires_auth: true,
+          };
+        }
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch profile');
+        }
+        
+        const data = await response.json();
+        
+        return {
+          success: true,
+          profile_data: data,
+          message: 'Profile loaded successfully',
+        };
+      } catch (error) {
+        console.error('View profile failed:', error);
+        return {
+          success: false,
+          message: 'Failed to load profile',
+        };
+      }
+    },
+    inputSchema: z.object({}),
+    outputSchema: z.object({
+      success: z.boolean(),
+      profile_data: z.any().optional(),
+      message: z.string(),
+      requires_auth: z.boolean().optional(),
+    }),
+  },
+  {
+    name: "updateProfile",
+    description:
+      "Update user profile information such as name, email, phone, or address. Use when user wants to change their profile details like 'change my name to John', 'update my email', 'change phone number', etc.",
+    tool: async ({ full_name, email, phone, address }: { full_name?: string; email?: string; phone?: string; address?: string }) => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        if (!token) {
+          return {
+            success: false,
+            message: 'Please login to update your profile',
+            requires_auth: true,
+          };
+        }
+        
+        const updates: any = {};
+        if (full_name) updates.full_name = full_name;
+        if (email) updates.email = email;
+        if (phone) updates.phone = phone;
+        if (address) updates.address = address;
+        
+        if (Object.keys(updates).length === 0) {
+          return {
+            success: false,
+            message: 'No fields to update',
+          };
+        }
+        
+        const response = await fetch(`${BACKEND_URL}/profile/update`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(updates),
+        });
+        
+        if (response.status === 401) {
+          return {
+            success: false,
+            message: 'Please login to update your profile',
+            requires_auth: true,
+          };
+        }
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.detail || 'Update failed');
+        }
+        
+        // Update localStorage
+        if (typeof window !== 'undefined' && data.user) {
+          const storedUser = localStorage.getItem('user');
+          if (storedUser) {
+            const userObj = JSON.parse(storedUser);
+            localStorage.setItem('user', JSON.stringify({ ...userObj, ...data.user }));
+          }
+        }
+        
+        return {
+          success: true,
+          message: data.message || 'Profile updated successfully',
+          updated_user: data.user,
+        };
+      } catch (error: any) {
+        console.error('Update profile failed:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to update profile',
+        };
+      }
+    },
+    inputSchema: z.object({
+      full_name: z.string().optional().describe("User's full name"),
+      email: z.string().email().optional().describe("User's email address"),
+      phone: z.string().optional().describe("User's phone number"),
+      address: z.string().optional().describe("User's shipping address"),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      message: z.string(),
+      updated_user: z.any().optional(),
+      requires_auth: z.boolean().optional(),
+    }),
+  },
+  {
     name: "removeFromCart",
     description:
       "Remove item from cart. Use when user says 'remove from cart', 'delete item', etc.",
@@ -380,67 +525,6 @@ export const tools: TamboTool[] = [
         email: z.string(),
       }).optional(),
       message: z.string(),
-    }),
-  },
-  {
-    name: "viewOrderDetails",
-    description:
-      "View detailed order information. Use when user asks 'show order details', 'order info', 'what did I order', 'my orders', 'order history', etc.",
-    tool: async () => {
-      try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        
-        const response = await fetch(`${BACKEND_URL}/chat`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ 
-            message: 'show order history', 
-            session_id: 'default' 
-          }),
-        });
-        
-        if (response.status === 401) {
-          return {
-            orders: [],
-            message: 'Please login to view order details',
-          };
-        }
-        
-        if (!response.ok) {
-          throw new Error(`Backend returned ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        return {
-          orders: data.ui_props?.orders || [],
-          agent_response: data.agent_response || '',
-          ui_component: data.ui_component,
-        };
-      } catch (error) {
-        console.error('View order details failed:', error);
-        return {
-          orders: [],
-          message: 'Failed to load order details',
-        };
-      }
-    },
-    inputSchema: z.object({}),
-    outputSchema: z.object({
-      orders: z.array(z.object({
-        orderId: z.string(),
-        date: z.string(),
-        items: z.array(z.any()),
-        total: z.number(),
-        status: z.string(),
-      })).default([]),
-      agent_response: z.string().optional(),
-      ui_component: z.string().nullable().optional(),
-      message: z.string().optional(),
     }),
   },
   {
@@ -670,5 +754,12 @@ export const components: TamboComponent[] = [
       "Display user's past orders with details. Use when user wants to see order history, past purchases, or previous orders.",
     component: OrderHistory,
     propsSchema: orderHistorySchema,
+  },
+  {
+    name: "UserProfile",
+    description:
+      "Comprehensive user profile displaying personal information, current cart items, order history, and statistics. Use when user says 'show my profile', 'view profile', 'my account', 'account details', 'profile page', etc.",
+    component: UserProfile,
+    propsSchema: userProfileSchema,
   },
 ];

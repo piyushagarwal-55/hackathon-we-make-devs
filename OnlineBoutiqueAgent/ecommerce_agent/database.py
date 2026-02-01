@@ -38,12 +38,15 @@ class User:
     """User model"""
     
     @staticmethod
-    def create(email: str, username: str, hashed_password: str) -> dict:
+    def create(email: str, username: str, hashed_password: str, full_name: str = None, phone: str = None, address: str = None) -> dict:
         """Create a new user"""
         user = {
             "email": email,
             "username": username,
             "password": hashed_password,
+            "full_name": full_name or username,
+            "phone": phone or "",
+            "address": address or "",
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
@@ -76,6 +79,31 @@ class User:
             if user:
                 user["_id"] = str(user["_id"])
             return user
+        except:
+            return None
+    
+    @staticmethod
+    def update_profile(user_id: str, updates: dict) -> Optional[dict]:
+        """Update user profile fields"""
+        from bson import ObjectId
+        try:
+            # Only allow specific fields to be updated
+            allowed_fields = ["full_name", "email", "phone", "address"]
+            filtered_updates = {k: v for k, v in updates.items() if k in allowed_fields}
+            
+            if not filtered_updates:
+                return None
+            
+            filtered_updates["updated_at"] = datetime.utcnow()
+            
+            result = users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {"$set": filtered_updates}
+            )
+            
+            if result.modified_count > 0:
+                return User.find_by_id(user_id)
+            return None
         except:
             return None
 

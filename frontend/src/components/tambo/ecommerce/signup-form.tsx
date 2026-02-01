@@ -53,6 +53,10 @@ export function SignupForm(props: SignupFormProps) {
       // Store token in localStorage
       localStorage.setItem("auth_token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("user_id", data.user._id);
+
+      // Trigger auth-change event for header update
+      window.dispatchEvent(new Event('auth-change'));
 
       // Show success message
       alert(`✅ ${data.message}\n\nYou can now add items to cart and checkout!`);
