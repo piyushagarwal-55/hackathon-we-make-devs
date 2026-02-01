@@ -114,6 +114,106 @@ export function OrderHistory(props: OrderHistoryProps) {
     fetchOrders();
   }, [props?.orders]);
 
+  // PDF Export functionality
+  const [exportingAll, setExportingAll] = React.useState(false);
+  const [exportingOrderId, setExportingOrderId] = React.useState<string | null>(null);
+
+  const handleExportAll = async () => {
+    console.log('📤 [Export] Exporting all orders...');
+    setExportingAll(true);
+    
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      if (!token) {
+        alert('Please login to export orders');
+        return;
+      }
+
+      const response = await fetch('http://localhost:8000/export/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          session_id: 'default',
+          export_all: true
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Export failed' }));
+        throw new Error(error.detail || 'Failed to export orders');
+      }
+
+      // Download PDF
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `all_orders_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      console.log('✅ [Export] All orders exported successfully');
+    } catch (error) {
+      console.error('❌ [Export] Failed:', error);
+      alert(`Failed to export orders: ${(error as Error).message}`);
+    } finally {
+      setExportingAll(false);
+    }
+  };
+
+  const handleExportOrder = async (orderId: string) => {
+    console.log(`📤 [Export] Exporting order ${orderId}...`);
+    setExportingOrderId(orderId);
+    
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      if (!token) {
+        alert('Please login to export order');
+        return;
+      }
+
+      const response = await fetch('http://localhost:8000/export/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          session_id: 'default',
+          order_id: orderId
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Export failed' }));
+        throw new Error(error.detail || 'Failed to export order');
+      }
+
+      // Download PDF
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `order_${orderId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      console.log(`✅ [Export] Order ${orderId} exported successfully`);
+    } catch (error) {
+      console.error('❌ [Export] Failed:', error);
+      alert(`Failed to export order: ${(error as Error).message}`);
+    } finally {
+      setExportingOrderId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="w-full max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-12">
@@ -177,9 +277,13 @@ export function OrderHistory(props: OrderHistoryProps) {
               </p>
             </div>
           </div>
-          <button className="px-4 py-2 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+          <button 
+            onClick={handleExportAll}
+            disabled={exportingAll}
+            className="px-4 py-2 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Download className="w-4 h-4" />
-            Export All
+            {exportingAll ? 'Exporting...' : 'Export All'}
           </button>
         </div>
       </div>
@@ -217,9 +321,13 @@ export function OrderHistory(props: OrderHistoryProps) {
                     <CheckCircle2 className="w-4 h-4" />
                     {order.status}
                   </span>
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 flex items-center gap-2">
+                  <button 
+                    onClick={() => handleExportOrder(order.orderId)}
+                    disabled={exportingOrderId === order.orderId}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     <Download className="w-4 h-4" />
-                    Receipt
+                    {exportingOrderId === order.orderId ? 'Exporting...' : 'Receipt'}
                   </button>
                 </div>
               </div>

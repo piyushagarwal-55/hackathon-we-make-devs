@@ -1190,12 +1190,19 @@ async def get_orders(session_id: str, authorization: Optional[str] = Header(None
 
 @app.post("/export/pdf")
 async def export_order_pdf(request: dict, authorization: str = Header(None)):
-    """Generate PDF for order using existing export_agent"""
+    """Generate PDF for order(s) using existing export_agent"""
     try:
         session_id = request.get('session_id', 'default')
+        order_id = request.get('order_id')  # Single order ID
+        export_all = request.get('export_all', False)  # Export all orders flag
         
-        print(f"📄 EXPORT PDF - Session: {session_id}")
-        print(f"🔑 Authorization header: {authorization[:20] if authorization else 'None'}...")
+        print(f"\n{'='*80}")
+        print(f"📄 EXPORT PDF REQUEST")
+        print(f"{'='*80}")
+        print(f"📝 Session: {session_id}")
+        print(f"🔑 Authorization: {authorization[:20] if authorization else 'None'}...")
+        print(f"🆔 Order ID: {order_id}")
+        print(f"📦 Export All: {export_all}")
         print(f"🔧 MONGODB_ENABLED: {MONGODB_ENABLED}")
         
         orders = []
@@ -1208,8 +1215,27 @@ async def export_order_pdf(request: dict, authorization: str = Header(None)):
                 raise HTTPException(status_code=401, detail='Please login to export orders')
             
             print(f"✅ User authenticated: {user.get('email')}")
-            orders = Order.get_user_orders(user["_id"])
-            print(f"📋 MongoDB orders found: {len(orders)}")
+            all_orders = Order.get_user_orders(user["_id"])
+            print(f"📋 Total user orders: {len(all_orders)}")
+            
+            # Filter orders based on parameters
+            if order_id:
+                # Export specific order
+                print(f"🔍 Looking for order ID: {order_id}")
+                orders = [o for o in all_orders if str(o.get('_id'))[:8] == order_id[:8]]
+                if not orders:
+                    print(f"❌ Order {order_id} not found!")
+                    raise HTTPException(status_code=404, detail=f'Order {order_id} not found')
+                print(f"✅ Found order: {orders[0].get('_id')}")
+            elif export_all:
+                # Export all orders
+                orders = all_orders
+                print(f"📦 Exporting all {len(orders)} orders")
+            else:
+                # Default: export last order (backward compatible)
+                if all_orders:
+                    orders = [all_orders[-1]]
+                    print(f"📦 Exporting last order (default)")
         else:
             # Fallback to in-memory
             orders = order_history.get(session_id, [])
@@ -1219,9 +1245,10 @@ async def export_order_pdf(request: dict, authorization: str = Header(None)):
             print("❌ No orders found!")
             raise HTTPException(status_code=404, detail='No orders found to export')
         
-        # Get last order
-        order = orders[-1]
-        print(f"📦 Exporting order: {order}")
+        # For now, export only the first/last order (single order PDF)
+        # TODO: Implement multi-order PDF generation for export_all
+        order = orders[-1] if not order_id else orders[0]
+        print(f"📦 Exporting order: {order.get('_id', 'N/A')}")
         
         # Format items for PDF (export_agent expects specific structure)
         formatted_items = []
