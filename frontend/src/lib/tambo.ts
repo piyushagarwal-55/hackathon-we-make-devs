@@ -169,63 +169,6 @@ export const tools: TamboTool[] = [
     }),
   },
   {
-    name: "viewProfile",
-    description:
-      "View complete user profile with personal information, cart items, and order statistics. Use ONLY when user specifically asks for 'profile', 'my account', 'account details', 'account info', 'account settings'. Do NOT use for order history queries.",
-    tool: async () => {
-      try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-        if (!token) {
-          return {
-            success: false,
-            message: 'Please login to view your profile',
-            requires_auth: true,
-          };
-        }
-        
-        const response = await fetch(`${BACKEND_URL}/profile`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        
-        if (response.status === 401) {
-          return {
-            success: false,
-            message: 'Please login to view your profile',
-            requires_auth: true,
-          };
-        }
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch profile');
-        }
-        
-        const data = await response.json();
-        
-        return {
-          success: true,
-          profile_data: data,
-          message: 'Profile loaded successfully',
-        };
-      } catch (error) {
-        console.error('View profile failed:', error);
-        return {
-          success: false,
-          message: 'Failed to load profile',
-        };
-      }
-    },
-    inputSchema: z.object({}),
-    outputSchema: z.object({
-      success: z.boolean(),
-      profile_data: z.any().optional(),
-      message: z.string(),
-      requires_auth: z.boolean().optional(),
-    }),
-  },
-  {
     name: "updateProfile",
     description:
       "Update user profile information such as name, email, phone, or address. Use when user wants to change their profile details like 'change my name to John', 'update my email', 'change phone number', etc.",

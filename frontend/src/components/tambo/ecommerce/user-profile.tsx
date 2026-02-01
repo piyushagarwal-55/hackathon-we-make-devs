@@ -38,12 +38,12 @@ const userDataSchema = z.object({
 }).nullable();
 
 export const userProfileSchema = z.object({
-  user: userDataSchema,
+  user: userDataSchema.optional(),
   cart_items: z.array(cartItemSchema).default([]),
   orders: z.array(orderSchema).default([]),
   total_cart_items: z.number().default(0),
   total_orders: z.number().default(0),
-}).nullable();
+});
 
 type UserProfileProps = z.infer<typeof userProfileSchema>;
 
