@@ -4,37 +4,37 @@ import React, { useState, useEffect } from "react";
 import { z } from "zod";
 
 const cartItemSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  price: z.number(),
-  quantity: z.number(),
+  id: z.string().default(''),
+  name: z.string().default(''),
+  price: z.number().default(0),
+  quantity: z.number().default(1),
   image: z.string().optional(),
 }).nullable();
 
 const orderItemSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  price: z.number(),
-  quantity: z.number(),
+  id: z.string().default(''),
+  name: z.string().default(''),
+  price: z.number().default(0),
+  quantity: z.number().default(1),
   image: z.string().optional(),
 }).nullable();
 
 const orderSchema = z.object({
-  orderId: z.string(),
-  date: z.string(),
-  items: z.array(orderItemSchema),
-  total: z.number(),
-  status: z.string(),
+  orderId: z.string().default(''),
+  date: z.string().default(''),
+  items: z.array(orderItemSchema).default([]),
+  total: z.number().default(0),
+  status: z.string().default('pending'),
 }).nullable();
 
 const userDataSchema = z.object({
-  id: z.string(),
-  email: z.string(),
-  username: z.string(),
-  full_name: z.string().optional(),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  created_at: z.string().optional(),
+  id: z.string().default(''),
+  email: z.string().default(''),
+  username: z.string().default(''),
+  full_name: z.string().default(''),
+  phone: z.string().default(''),
+  address: z.string().default(''),
+  created_at: z.string().default(''),
 }).nullable();
 
 export const userProfileSchema = z.object({

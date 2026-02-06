@@ -1,0 +1,36 @@
+{
+  "name": "commerce-genui-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Commerce GenUI SDK - Monorepo for all packages",
+  "scripts": {
+    "build": "npm run build:types && npm run build:react && npm run build:components",
+    "build:types": "cd packages/types && npm run build",
+    "build:react": "cd packages/react && npm run build",
+    "build:components": "cd packages/components && npm run build",
+    "dev": "npm run dev:types & npm run dev:react & npm run dev:components",
+    "dev:types": "cd packages/types && npm run dev",
+    "dev:react": "cd packages/react && npm run dev",
+    "dev:components": "cd packages/components && npm run dev",
+    "clean": "rm -rf packages/*/dist",
+    "example:minimal": "cd examples/minimal-shop/backend && python server.py"
+  },
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "keywords": [
+    "commerce",
+    "genui",
+    "ecommerce",
+    "ai",
+    "generative-ui",
+    "tambo"
+  ],
+  "author": "ShopSage Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shopsage/commerce-genui"
+  }
+}

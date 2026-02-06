@@ -50,7 +50,7 @@ export const tools: TamboTool[] = [
   {
     name: "searchProducts",
     description:
-      "Search for products from Cymbal Shops e-commerce store. Use this EVERY TIME the user asks about products, items to buy, shopping, or wants to browse. Returns real product data with images, prices, and details.",
+      "Search for products from Cymbal Shops e-commerce store. Use this EVERY TIME the user asks about products, items to buy, shopping, wants to browse, or mentions product names/categories. This includes: 'show products', 'all products', 'product list', 'browse', 'search for X', 'find X', 'looking for X', product categories, etc. Returns real product data with images, prices, and details.",
     tool: async ({ query }: { query: string }) => {
       try {
         const response = await fetch(`${BACKEND_URL}/chat`, {
@@ -95,6 +95,131 @@ export const tools: TamboTool[] = [
       })).default([]),
       agent_response: z.string().default(''),
       ui_component: z.string().nullable().optional(),
+    }),
+  },
+  {
+    name: "getProfile",
+    description:
+      "Get user profile information including cart and order history. Use when user says 'show my profile', 'view profile', 'my account', 'account details', 'profile page', 'my profile', 'show profile', 'user info', 'account info', etc. ALWAYS use this tool for profile requests.",
+    tool: async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        const response = await fetch(`${BACKEND_URL}/chat`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            message: 'show my profile',
+            session_id: 'default'
+          }),
+        });
+        
+        const data = await response.json();
+        
+        if (response.status === 401) {
+          return {
+            success: false,
+            message: data.agent_response || 'Please login to view your profile',
+            requires_auth: true,
+            ui_component: 'LoginForm',
+          };
+        }
+        
+        if (!response.ok) {
+          return {
+            success: false,
+            message: 'Failed to load profile',
+          };
+        }
+        
+        return {
+          success: true,
+          profile: data.ui_props || {},
+          ui_component: data.ui_component,
+          message: data.agent_response,
+        };
+      } catch (error) {
+        console.error('Get profile failed:', error);
+        return {
+          success: false,
+          message: 'Failed to load profile',
+          requires_auth: true,
+        };
+      }
+    },
+    inputSchema: z.object({}),
+    outputSchema: z.object({
+      success: z.boolean(),
+      profile: z.any().optional(),
+      ui_component: z.string().optional(),
+      message: z.string(),
+      requires_auth: z.boolean().optional(),
+    }),
+  },
+  {
+    name: "getCart",
+    description:
+      "View shopping cart contents. Use when user says 'show cart', 'my cart', 'view cart', 'see cart', 'cart items', 'what's in my cart', 'whats in my cart', 'show my cart', 'display cart', 'cart contents', etc. ALWAYS use this tool for cart view requests.",
+    tool: async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        const response = await fetch(`${BACKEND_URL}/chat`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            message: 'show my cart',
+            session_id: 'default'
+          }),
+        });
+        
+        const data = await response.json();
+        
+        if (response.status === 401) {
+          return {
+            success: false,
+            message: data.agent_response || 'Please login to view your cart',
+            requires_auth: true,
+            ui_component: 'LoginForm',
+          };
+        }
+        
+        if (!response.ok) {
+          return {
+            success: false,
+            message: 'Failed to load cart',
+          };
+        }
+        
+        return {
+          success: true,
+          cart: data.ui_props?.cartItems || [],
+          ui_component: data.ui_component,
+          message: data.agent_response,
+        };
+      } catch (error) {
+        console.error('Get cart failed:', error);
+        return {
+          success: false,
+          message: 'Failed to load cart',
+        };
+      }
+    },
+    inputSchema: z.object({}),
+    outputSchema: z.object({
+      success: z.boolean(),
+      cart: z.array(z.any()).optional(),
+      ui_component: z.string().optional(),
+      message: z.string(),
+      requires_auth: z.boolean().optional(),
     }),
   },
   {
@@ -289,6 +414,53 @@ export const tools: TamboTool[] = [
     outputSchema: z.object({
       success: z.boolean(),
       cart: z.array(z.any()).optional(),
+      message: z.string(),
+    }),
+  },
+  {
+    name: "compareProducts",
+    description:
+      "Compare multiple products side-by-side. Use when user says 'compare X and Y', 'compare between X and Y', 'difference between X and Y', 'X vs Y', 'which is better X or Y', etc. This ensures fresh product data is retrieved from backend.",
+    tool: async ({ query }: { query: string }) => {
+      try {
+        const response = await fetch(`${BACKEND_URL}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: query,
+            session_id: 'default',
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Backend returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const products = data.ui_props?.products || data.products || [];
+        
+        return {
+          success: true,
+          products,
+          ui_component: 'ComparisonTable',
+          message: data.agent_response || `Comparing products`,
+        };
+      } catch (error) {
+        console.error('Compare products failed:', error);
+        return {
+          success: false,
+          products: [],
+          message: 'Failed to compare products',
+        };
+      }
+    },
+    inputSchema: z.object({
+      query: z.string().describe("Comparison request including product names (e.g., 'compare sunglasses and mug')"),
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      products: z.array(z.any()).optional(),
+      ui_component: z.string().optional(),
       message: z.string(),
     }),
   },

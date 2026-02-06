@@ -1,0 +1,32 @@
+{
+  "name": "@commerce-genui/types",
+  "version": "0.1.0",
+  "description": "TypeScript type definitions for Commerce GenUI SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "commerce",
+    "genui",
+    "types",
+    "typescript",
+    "ecommerce"
+  ],
+  "author": "ShopSage Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
+  },
+  "files": [
+    "dist",
+    "src"
+  ]
+}
