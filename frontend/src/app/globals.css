@@ -181,4 +181,13 @@ Animated gradient for thinking text, creates a shimmering effect that moves acro
   margin: 0.5rem 0;
   font-size: 0.875rem;
   color: #1e40af;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chat-only-view .component-notification:hover {
+  background: linear-gradient(to right, #dbeafe, #ede9fe);
+  border-left-color: #2563eb;
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
 }

@@ -17,8 +17,9 @@ export function withPanelRendering<P extends object>(
     console.log(`🎨 [WrappedComponent] ${componentName} RENDER START`);
     console.log(`📊 [WrappedComponent] Props:`, props);
     
-    const { setComponent } = useUIPanel();
+    const { setComponent, restoreComponent } = useUIPanel();
     const prevPropsRef = useRef<string>('');
+    const componentIdRef = useRef<string>('');
     
     console.log(`🔗 [WrappedComponent] useUIPanel hook obtained, setComponent:`, typeof setComponent);
 
@@ -32,9 +33,10 @@ export function withPanelRendering<P extends object>(
         console.log(`📤 [WrappedComponent] Calling setComponent(${componentName}, props)`);
         
         try {
-          setComponent(componentName, props);
+          const component = setComponent(componentName, props);
+          componentIdRef.current = component.id;
           prevPropsRef.current = currentPropsString;
-          console.log(`✅ [WrappedComponent] setComponent called successfully`);
+          console.log(`✅ [WrappedComponent] setComponent called successfully, ID: ${component.id}`);
         } catch (error) {
           console.error(`❌ [WrappedComponent] Error calling setComponent:`, error);
         }
@@ -43,11 +45,22 @@ export function withPanelRendering<P extends object>(
       }
     }); // Run on every render to check for prop changes
 
+    const handleClick = () => {
+      if (componentIdRef.current) {
+        console.log(`🖱️ [WrappedComponent] Notification clicked, restoring: ${componentIdRef.current}`);
+        restoreComponent(componentIdRef.current);
+      }
+    };
+
     console.log(`🎯 [WrappedComponent] Returning notification div for ${componentName}`);
     
-    // Return a notification message for the chat instead of the full component
+    // Return a clickable notification message for the chat instead of the full component
     return (
-      <div className="component-notification">
+      <div 
+        className="component-notification cursor-pointer hover:bg-blue-50 transition-colors"
+        onClick={handleClick}
+        title="Click to restore this component version"
+      >
         <span className="font-medium">📊 {componentName}</span> displayed in preview panel →
       </div>
     );
