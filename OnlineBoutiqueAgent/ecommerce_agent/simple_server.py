@@ -3,7 +3,8 @@ Simplified FastAPI server for E-commerce Agent
 Directly uses product search functions without complex agent orchestration
 """
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, File, UploadFile, Form
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -13,7 +14,9 @@ import sys
 import os
 import io
 import base64
+import tempfile
 from datetime import datetime
+from rembg import remove as remove_bg  # Background removal for virtual try-on
 
 # Add to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -1310,6 +1313,282 @@ async def export_order_pdf(request: dict, authorization: str = Header(None)):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/virtual-tryon")
+async def virtual_tryon(
+    user_image: UploadFile = File(...),
+    product_id: str = Form(...)
+):
+    """
+    Virtual try-on endpoint using GeminiPlacer + OpenCV eye detection
+    Accepts user image and product ID, returns AI-generated try-on image
+    """
+    try:
+        # Import modules
+        from agents.virtual_tryon_agent.gemini_placer import GeminiPlacer
+        try:
+            # Try MediaPipe first (more accurate)
+            from agents.virtual_tryon_agent.mediapipe_face_detector import MediaPipeFaceDetector
+            FaceDetector = MediaPipeFaceDetector
+            print("🎯 Using MediaPipe Face Mesh for detection")
+        except Exception as mp_error:
+            # Fallback to OpenCV Haar Cascades (reliable)
+            from agents.virtual_tryon_agent.eye_detector import EyeDetector
+            FaceDetector = EyeDetector
+            print("🎯 Using OpenCV Haar Cascades for detection (MediaPipe not available)")
+        
+        import google.generativeai as genai
+        from PIL import Image
+        import requests
+        from bs4 import BeautifulSoup
+        
+        print(f"\n{'='*80}")
+        print(f"🎨 VIRTUAL TRY-ON REQUEST")
+        print(f"{'='*80}")
+        print(f"📸 User image: {user_image.filename}")
+        print(f"🆔 Product ID: {product_id}")
+        
+        # Read user image
+        user_image_bytes = await user_image.read()
+        print(f"✅ User image loaded: {len(user_image_bytes)} bytes")
+        
+        # Get product details from Cymbal Shops
+        product_url = f"https://cymbal-shops.retail.cymbal.dev/product/{product_id}"
+        print(f"🔍 Fetching product from: {product_url}")
+        response = requests.get(product_url)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        product_name = soup.find('h2').get_text(strip=True) if soup.find('h2') else "Product"
+        
+        # Determine if it's eyewear
+        product_name_lower = product_name.lower()
+        is_eyewear = any(keyword in product_name_lower for keyword in ['glasses', 'sunglasses', 'eyewear'])
+        
+        # ✅ USE PRE-NORMALIZED PRODUCT ASSET FOR EYEWEAR
+        # For eyewear, use our normalized, straightened, background-removed asset
+        # This eliminates rotation issues and ensures perfect alignment
+        if is_eyewear:
+            print("🎯 Using pre-normalized eyewear asset (sunglasses_fixed.png)")
+            local_asset_path = os.path.join(
+                os.path.dirname(__file__),
+                'agents', 'virtual_tryon_agent', 'sunglasses_fixed.png'
+            )
+            if os.path.exists(local_asset_path):
+                with open(local_asset_path, 'rb') as f:
+                    product_image_clean = f.read()
+                print(f"✅ Loaded normalized eyewear: {local_asset_path}")
+            else:
+                print(f"⚠️ Normalized asset not found at {local_asset_path}, falling back to online scraping")
+                image_elem = soup.find('img', class_='product-image')
+                product_image_url = f"https://cymbal-shops.retail.cymbal.dev{image_elem['src']}" if image_elem else None
+                if not product_image_url:
+                    raise HTTPException(status_code=404, detail="Product image not found")
+                product_response = requests.get(product_image_url)
+                product_response.raise_for_status()
+                product_image_bytes = product_response.content
+                print("🔮 Removing background from product image...")
+                product_image_clean = remove_bg(product_image_bytes)
+                print("✅ Background removed!")
+        else:
+            # For non-eyewear, continue with online scraping and background removal
+            image_elem = soup.find('img', class_='product-image')
+            product_image_url = f"https://cymbal-shops.retail.cymbal.dev{image_elem['src']}" if image_elem else None
+            if not product_image_url:
+                raise HTTPException(status_code=404, detail="Product image not found")
+            print(f"🖼️ Product image: {product_image_url}")
+            product_response = requests.get(product_image_url)
+            product_response.raise_for_status()
+            product_image_bytes = product_response.content
+            print("🔮 Removing background from product image...")
+            product_image_clean = remove_bg(product_image_bytes)
+            print("✅ Background removed!")
+        
+        # Set context hint
+        if is_eyewear:
+            context_hint = "This is eyewear (glasses/sunglasses). It should be placed on the person's face, centered on the nose bridge."
+        else:
+            context_hint = f"This is {product_name}. Place it appropriately on the person."
+        
+        print(f"✅ Product: {product_name}")
+        print(f"🏷️ Product type: {'Eyewear' if is_eyewear else 'General'}")
+        
+        # Initialize Gemini - check both env var names
+        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            print("❌ Gemini API key not configured")
+            print("   Set GOOGLE_API_KEY or GEMINI_API_KEY in .env file")
+            raise HTTPException(status_code=500, detail="Gemini API key not configured. Please set GOOGLE_API_KEY or GEMINI_API_KEY in .env file")
+        
+        print(f"✅ Using Gemini API key: {api_key[:10]}...{api_key[-5:]}")
+        
+        genai.configure(api_key=api_key)
+        gemini_model = genai.GenerativeModel('models/gemini-2.5-flash')
+        placer = GeminiPlacer(gemini_model)
+        print("✅ GeminiPlacer initialized")
+        
+        # Get product dimensions from cleaned image
+        product_img = Image.open(io.BytesIO(product_image_clean)).convert("RGBA")
+        object_dimensions = product_img.size
+        print(f"📐 Product dimensions: {object_dimensions[0]}x{object_dimensions[1]}")
+        
+        # ✅ For normalized assets: NO rotation needed (already straight)
+        # Product rotation is REMOVED - we use pre-normalized assets instead
+        
+        # For eyewear, use eye detection
+        eye_data = None
+        if is_eyewear:
+            try:
+                print("👁️ Detecting face landmarks...")
+                eye_detector = FaceDetector()
+                eye_data = eye_detector.detect_eyes(user_image_bytes)
+                if eye_data:
+                    print(f"✅ Face detected: eyes at {eye_data['eye_center']}, distance: {eye_data['eye_distance']:.2f}px, angle: {eye_data['angle']:.2f}°")
+                else:
+                    print("⚠️ No face detected, will use Gemini-only placement")
+            except Exception as e:
+                print(f"⚠️ Face detection failed: {e}")
+                import traceback
+                traceback.print_exc()
+                eye_data = None
+        
+        # ✅ CRITICAL FIX #5: Skip Gemini for eyewear when we have precise landmarks
+        # Deterministic geometry > LLM guessing for glasses
+        placement = {}
+        
+        if is_eyewear and eye_data:
+            # For eyewear with face detection: use ONLY deterministic geometry (NO Gemini)
+            print("🎯 Using deterministic geometry (Gemini DISABLED for eyewear)")
+            # Create minimal placeholder - will be overridden by geometry below
+            placement = {'x': 0, 'y': 0, 'scale': 1.0, 'rotation': 0}
+        else:
+            # For non-eyewear OR eyewear without face detection: use Gemini
+            print("🤖 Getting AI placement from Gemini...")
+            placement = placer.get_object_placement(
+                background_image_bytes=user_image_bytes,
+                object_description=product_name,
+                context_hint=context_hint,
+                eye_data=eye_data,
+                object_dimensions=object_dimensions
+            )
+            print(f"✅ Gemini Placement: x={placement['x']}, y={placement['y']}, scale={placement['scale']}, rotation={placement['rotation']}")
+        
+        # 🎯 OVERRIDE placement for eyewear with precise eye detection data
+        if is_eyewear and eye_data:
+            print("👓 Applying PROFESSIONAL eyewear placement (landmark-based)...")
+            print("=" * 60)
+            
+            # Get user image dimensions
+            user_img = Image.open(io.BytesIO(user_image_bytes))
+            bg_width, bg_height = user_img.size
+            
+            # Get product dimensions
+            product_width, product_height = object_dimensions
+            
+            print(f"   📐 Background: {bg_width}x{bg_height}px")
+            print(f"   📦 Product: {product_width}x{product_height}px")
+            print(f"   👁️ Eyes: left={eye_data['left_eye']}, right={eye_data['right_eye']}")
+            print(f"   👃 Nose bridge: {eye_data['nose_bridge']}")
+            print(f"   📏 Eye distance: {eye_data['eye_distance']:.2f}px")
+            print(f"   🔄 Face angle: {eye_data['angle']:.2f}°")
+            
+            # CRITICAL: Use nose bridge as anchor point (not eye center!)
+            nose_x, nose_y = eye_data['nose_bridge']
+            eye_distance = eye_data['eye_distance']
+            angle = eye_data['angle']
+            
+            # ✅ CRITICAL FIX #3: Calculate ideal sunglasses width based on eye distance
+            # Professional formula: glasses width = eye_distance * 1.9
+            # Calibrated for aviator-style sunglasses (keeps lenses inside face)
+            # Human interpupillary distance ≈ 63mm, Frame width ≈ 120–130mm
+            WIDTH_MULTIPLIER = 1.9
+            ideal_glasses_width_px = eye_distance * WIDTH_MULTIPLIER
+            
+            print(f"   💡 Ideal glasses width: {ideal_glasses_width_px:.1f}px (eye_dist × {WIDTH_MULTIPLIER})")
+            
+            # Calculate scale factor
+            # scale = how much to resize product image to achieve ideal width
+            scale = ideal_glasses_width_px / product_width
+            
+            # Calculate final glasses dimensions after scaling
+            final_glasses_width = int(product_width * scale)
+            final_glasses_height = int(product_height * scale)
+            
+            print(f"   📊 Scale factor: {scale:.3f}")
+            print(f"   🔍 Final glasses size: {final_glasses_width}x{final_glasses_height}px")
+            
+            # ✅ CRITICAL FIX #4: Position offsets - compensate for MediaPipe landmark positions
+            # MediaPipe's nose bridge is slightly lower than actual eyewear bridge position
+            # Product PNG optical center is slightly right-heavy
+            # Final calibrated values for sunglasses_fixed.png
+            X_OFFSET = -100  # Shift left (product optical center compensation)
+            Y_OFFSET = -60  # Move UP (MediaPipe bridge sits lower than actual glasses)
+            
+            # Final placement coordinates (ANCHOR AT NOSE BRIDGE with offsets!)
+            # This is the CENTER of the sunglasses
+            final_x = nose_x + X_OFFSET
+            final_y = nose_y + Y_OFFSET
+            
+            print(f"   📍 Anchor point (nose bridge): ({nose_x}, {nose_y})")
+            print(f"   ↔️ X-offset (shift left): {X_OFFSET}px")
+            print(f"   ⬆️ Y-offset (move UP): {Y_OFFSET}px")
+            print(f"   🎯 Final center position: ({final_x}, {final_y})")
+            
+            # Override Gemini's guesses with PRECISE landmark-based values
+            placement['x'] = final_x
+            placement['y'] = final_y
+            placement['scale'] = scale
+            placement['rotation'] = int(angle)
+            
+            print(f"   ✅ OVERRIDDEN placement:")
+            print(f"      • Position: ({final_x}, {final_y})")
+            print(f"      • Scale: {scale:.3f}")
+            print(f"      • Rotation: {int(angle)}°")
+            print("=" * 60)
+        
+        # Save cleaned product image temporarily (as PNG to preserve transparency)
+        temp_dir = tempfile.gettempdir()
+        temp_product_path = os.path.join(temp_dir, f"product_{os.getpid()}.png")
+        print(f"💾 Saving cleaned product to: {temp_product_path}")
+        product_img.save(temp_product_path, 'PNG')
+        
+        # Overlay object
+        print("🎨 Overlaying product on user image...")
+        final_image = GeminiPlacer.overlay_object(
+            background_image_bytes=user_image_bytes,
+            object_image_bytes=temp_product_path,
+            placement=placement
+        )
+        
+        # Clean up
+        if os.path.exists(temp_product_path):
+            os.remove(temp_product_path)
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        final_image.save(buffer, 'PNG')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+        
+        print(f"✅ Virtual try-on completed! Image size: {len(image_base64)} chars")
+        print(f"{'='*80}\n")
+        
+        return {
+            "status": "success",
+            "result_image": image_base64,
+            "product_name": product_name,
+            "method_used": "Gemini Placer with Computer Vision" if eye_data else "Gemini Placer",
+            "placement": placement
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Virtual try-on error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Virtual try-on failed: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,8 @@
 
 import { z } from "zod";
 import Image from "next/image";
-import { ShoppingCart, Star } from "lucide-react";
+import { ShoppingCart, Star, Camera } from "lucide-react";
+import { useUIPanel } from "@/contexts/ui-panel-context";
 
 // Helper to validate and provide fallback for image URLs
 const getValidImageUrl = (url: string): string => {
@@ -62,6 +63,8 @@ export function ProductGrid({
     4: "grid-cols-4",
   }[columns] || "grid-cols-3";
 
+  const { setComponent } = useUIPanel();
+
   const handleAddToCart = async (product: any) => {
     try {
       const BACKEND_URL = process.env.NEXT_PUBLIC_AGENT_BACKEND_URL || 'http://localhost:8000';
@@ -83,6 +86,22 @@ export function ProductGrid({
       console.error('Failed to add to cart:', error);
       alert('Failed to add to cart');
     }
+  };
+
+  const handleTryOn = (product: any) => {
+    // Trigger VirtualTryOnUploader component with product details
+    setComponent('VirtualTryOnUploader', {
+      productId: product.id,
+      productName: product.name,
+      productImage: getValidImageUrl(product.image),
+    });
+  };
+
+  // Check if product is suitable for virtual try-on
+  const canTryOn = (product: any): boolean => {
+    const tryOnKeywords = ['sunglasses', 'glasses', 'eyewear', 'hat', 'cap', 'watch', 'jewelry', 'necklace', 'earring', 'bracelet'];
+    const nameAndCategory = `${product.name} ${product.category || ''}`.toLowerCase();
+    return tryOnKeywords.some(keyword => nameAndCategory.includes(keyword));
   };
 
   return (
@@ -130,14 +149,26 @@ export function ProductGrid({
                     ${product.price.toFixed(2)}
                   </span>
                 </div>
-                <button
-                  className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 flex items-center gap-2 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all font-medium"
-                  disabled={product.inStock === false}
-                  onClick={() => handleAddToCart(product)}
-                >
-                  <ShoppingCart className="w-4 h-4" />
-                  Add
-                </button>
+                <div className="flex gap-2">
+                  {canTryOn(product) && (
+                    <button
+                      className="px-3 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 flex items-center gap-2 shadow-md hover:shadow-lg transition-all font-medium"
+                      onClick={() => handleTryOn(product)}
+                      title="Virtual Try-On"
+                    >
+                      <Camera className="w-4 h-4" />
+                      Try On
+                    </button>
+                  )}
+                  <button
+                    className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 flex items-center gap-2 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all font-medium"
+                    disabled={product.inStock === false}
+                    onClick={() => handleAddToCart(product)}
+                  >
+                    <ShoppingCart className="w-4 h-4" />
+                    Add
+                  </button>
+                </div>
               </div>
             </div>
           </div>

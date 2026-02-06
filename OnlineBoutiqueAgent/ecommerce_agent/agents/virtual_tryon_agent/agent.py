@@ -33,6 +33,18 @@ except Exception as e:
     log_to_file(f"Failed to import VirtualTryOn: {e}")
     VirtualTryOn = None
 
+# Import GeminiPlacer and EyeDetector
+try:
+    from .gemini_placer import GeminiPlacer
+    from .eye_detector import EyeDetector
+    GEMINI_PLACER_AVAILABLE = True
+    log_to_file("GeminiPlacer and EyeDetector modules imported successfully")
+except Exception as e:
+    GEMINI_PLACER_AVAILABLE = False
+    log_to_file(f"Failed to import GeminiPlacer/EyeDetector: {e}")
+    GeminiPlacer = None
+    EyeDetector = None
+
 async def process_user_image(artifact_filename: str, tool_context: ToolContext) -> dict:
     """Validates that a user's uploaded image artifact can be loaded."""
     try:
@@ -241,6 +253,125 @@ async def _generate_with_fal(user_image_artifact: str, product_id: str, tool_con
         return {"status": "error", "error": str(e)}
 
 
+async def _generate_with_gemini_placer(user_image_bytes: bytes, product_id: str, tool_context: ToolContext, output_artifact_name: str) -> dict:
+    """Generates virtual try-on using GeminiPlacer with OpenCV eye detection for eyewear."""
+    log_to_file("=== GEMINI PLACER GENERATION STARTED ===")
+    try:
+        # Check if modules are available
+        if not GEMINI_PLACER_AVAILABLE:
+            log_to_file("GeminiPlacer not available, skipping")
+            return {"status": "skip", "reason": "GeminiPlacer not available"}
+        
+        # Check if Gemini API is configured
+        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            log_to_file("Gemini API key not configured, skipping")
+            return {"status": "skip", "reason": "Gemini API key not configured"}
+        
+        # Get product details
+        log_to_file(f"Getting product details for ID: {product_id}")
+        product_details_response = await get_product_details_for_tryon(product_id)
+        if product_details_response["status"] != "success":
+            return product_details_response
+        product = product_details_response["product"]
+        log_to_file(f"Product: {product['name']}")
+        
+        # Get product image
+        product_image_response = requests.get(product["image_url"])
+        product_image_response.raise_for_status()
+        product_image_bytes = product_image_response.content
+        
+        # Determine product type and context hint
+        product_name_lower = product['name'].lower()
+        is_eyewear = any(keyword in product_name_lower for keyword in ['glasses', 'sunglasses', 'eyewear'])
+        
+        if is_eyewear:
+            context_hint = "This is eyewear (glasses/sunglasses). It should be placed on the person's face, centered on the nose bridge."
+        else:
+            context_hint = f"This is {product['name']}. Place it appropriately on the person."
+        
+        log_to_file(f"Product type: {'eyewear' if is_eyewear else 'general'}")
+        
+        # Initialize GeminiPlacer
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        gemini_model = genai.GenerativeModel('models/gemini-2.5-flash')
+        placer = GeminiPlacer(gemini_model)
+        log_to_file("GeminiPlacer initialized")
+        
+        # Get product image dimensions
+        product_img = Image.open(BytesIO(product_image_bytes))
+        object_dimensions = product_img.size
+        
+        # For eyewear, use eye detection
+        eye_data = None
+        if is_eyewear:
+            try:
+                log_to_file("Initializing EyeDetector for eyewear placement")
+                eye_detector = EyeDetector()
+                eye_data = eye_detector.detect_eyes(user_image_bytes)
+                if eye_data:
+                    log_to_file(f"Eyes detected at: {eye_data['eye_center']}, distance: {eye_data['eye_distance']:.2f}, angle: {eye_data['angle']:.2f}")
+                else:
+                    log_to_file("No eyes detected, will use Gemini without CV assistance")
+            except Exception as e:
+                log_to_file(f"Eye detection failed: {e}")
+                eye_data = None
+        
+        # Get placement from GeminiPlacer
+        log_to_file("Getting object placement from Gemini...")
+        placement = placer.get_object_placement(
+            background_image_bytes=user_image_bytes,
+            object_description=product['name'],
+            context_hint=context_hint,
+            eye_data=eye_data,
+            object_dimensions=object_dimensions
+        )
+        log_to_file(f"Placement received: {placement}")
+        
+        # Save product image temporarily for overlay
+        temp_product_path = f"/tmp/product_{int(time.time())}.png"
+        product_img.save(temp_product_path)
+        
+        # Overlay object on user image
+        log_to_file("Overlaying product on user image...")
+        final_image = GeminiPlacer.overlay_object(
+            background_image_bytes=user_image_bytes,
+            object_image_bytes=temp_product_path,
+            placement=placement
+        )
+        
+        # Convert to bytes
+        buffer = BytesIO()
+        final_image.save(buffer, 'PNG')
+        buffer.seek(0)
+        generated_image_bytes = buffer.read()
+        
+        # Clean up temp file
+        os.remove(temp_product_path)
+        
+        # Save as artifact
+        image_part = types.Part.from_bytes(data=generated_image_bytes, mime_type="image/png")
+        await tool_context.save_artifact(
+            filename=output_artifact_name,
+            artifact=image_part
+        )
+        
+        log_to_file("GeminiPlacer generation successful")
+        return {
+            "status": "success",
+            "output_artifacts": [output_artifact_name],
+            "model_used": "Gemini Placer with Computer Vision",
+            "product": product,
+            "used_eye_detection": eye_data is not None
+        }
+        
+    except Exception as e:
+        log_to_file(f"GeminiPlacer failed with exception: {e}")
+        print(f"GeminiPlacer failed: {e}")
+        return {"status": "error", "error": str(e)}
+
+
 async def _generate_placeholder(output_artifact_name: str, tool_context: ToolContext) -> dict:
     """Generates placeholder image as final fallback."""
     log_to_file("=== PLACEHOLDER GENERATION STARTED ===")
@@ -266,17 +397,46 @@ async def _generate_placeholder(output_artifact_name: str, tool_context: ToolCon
 
 
 async def generate_tryon_image(user_image_artifact: str, product_id: str, tool_context: ToolContext) -> dict:
-    """Generates a virtual try-on image by trying multiple methods in order: FAL -> Gemini -> Placeholder."""
+    """Generates a virtual try-on image by trying multiple methods in order: GeminiPlacer -> FAL -> Gemini -> Placeholder."""
     output_artifact_name = f"tryon_result_{int(time.time())}.png"
     log_to_file("========================================")
     log_to_file("STARTING VIRTUAL TRYON IMAGE GENERATION")
     log_to_file(f"User image artifact: {user_image_artifact}")
     log_to_file(f"Product ID: {product_id}")
     log_to_file(f"Output artifact name: {output_artifact_name}")
+    
+    # Load user image bytes for GeminiPlacer
+    user_image_bytes = None
+    try:
+        user_artifact = await tool_context.load_artifact(user_image_artifact)
+        if user_artifact and hasattr(user_artifact, 'inline_data'):
+            user_image_bytes = user_artifact.inline_data.data
+            log_to_file("User image bytes loaded successfully")
+    except Exception as e:
+        log_to_file(f"Failed to load user image bytes: {e}")
 
-    # Method 1: Try FAL VirtualTryOn first
+    # Method 1: Try GeminiPlacer with CV (best for eyewear)
+    if user_image_bytes:
+        print("Trying GeminiPlacer with Computer Vision...")
+        log_to_file("METHOD 1: Trying GeminiPlacer with Computer Vision")
+        try:
+            placer_result = await _generate_with_gemini_placer(user_image_bytes, product_id, tool_context, output_artifact_name)
+            if placer_result["status"] == "success":
+                log_to_file("GeminiPlacer generation successful - returning result")
+                return placer_result
+            elif placer_result["status"] == "skip":
+                log_to_file(f"Skipping GeminiPlacer: {placer_result['reason']}")
+                print(f"Skipping GeminiPlacer: {placer_result['reason']}")
+            else:
+                log_to_file(f"GeminiPlacer failed: {placer_result.get('error', 'Unknown error')}")
+                print(f"GeminiPlacer failed: {placer_result.get('error', 'Unknown error')}")
+        except Exception as e:
+            log_to_file(f"GeminiPlacer function call crashed with exception: {e}")
+            print(f"GeminiPlacer function call crashed: {e}")
+
+    # Method 2: Try FAL VirtualTryOn
     print("Trying FAL VirtualTryOn...")
-    log_to_file("METHOD 1: Trying FAL VirtualTryOn first")
+    log_to_file("METHOD 2: Trying FAL VirtualTryOn")
     try:
         fal_result = await _generate_with_fal(user_image_artifact, product_id, tool_context, output_artifact_name)
         if fal_result["status"] == "success":
@@ -292,9 +452,9 @@ async def generate_tryon_image(user_image_artifact: str, product_id: str, tool_c
         log_to_file(f"FAL function call crashed with exception: {e}")
         print(f"FAL function call crashed: {e}")
 
-    # Method 2: Try Gemini as fallback
+    # Method 3: Try Gemini as fallback
     print("Trying Gemini API...")
-    log_to_file("METHOD 2: Trying Gemini API as fallback")
+    log_to_file("METHOD 3: Trying Gemini API as fallback")
     gemini_result = await _generate_with_gemini(user_image_artifact, product_id, tool_context, output_artifact_name)
     if gemini_result["status"] == "success":
         log_to_file("Gemini generation successful - returning result")
@@ -306,9 +466,9 @@ async def generate_tryon_image(user_image_artifact: str, product_id: str, tool_c
         log_to_file(f"Gemini failed: {gemini_result.get('error', 'Unknown error')}")
         print(f"Gemini failed: {gemini_result.get('error', 'Unknown error')}")
 
-    # Method 3: Final fallback to placeholder
+    # Method 4: Final fallback to placeholder
     print("Using placeholder fallback...")
-    log_to_file("METHOD 3: Using placeholder as final fallback")
+    log_to_file("METHOD 4: Using placeholder as final fallback")
     placeholder_result = await _generate_placeholder(output_artifact_name, tool_context)
     log_to_file("Virtual tryon generation process completed")
     log_to_file("========================================")

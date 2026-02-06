@@ -36,6 +36,7 @@ import { LoginForm, loginFormSchema } from "@/components/tambo/ecommerce/login-f
 import { SignupForm, signupFormSchema } from "@/components/tambo/ecommerce/signup-form";
 import { OrderHistory, orderHistorySchema } from "@/components/tambo/ecommerce/order-history";
 import { UserProfile, userProfileSchema } from "@/components/tambo/ecommerce/user-profile";
+import { VirtualTryOnUploader, virtualTryOnSchema } from "@/components/tambo/ecommerce/virtual-tryon";
 import { withPanelRendering } from "@/components/wrapped-component";
 
 
@@ -826,5 +827,12 @@ export const components: TamboComponent[] = [
       "Comprehensive user profile displaying personal information, current cart items, order history, and statistics. Use when user says 'show my profile', 'view profile', 'my account', 'account details', 'profile page', etc.",
     component: withPanelRendering(UserProfile, "UserProfile"),
     propsSchema: userProfileSchema,
+  },
+  {
+    name: "VirtualTryOnUploader",
+    description:
+      "Virtual try-on component where user uploads their photo to see how a product (especially eyewear/sunglasses) looks on them. Use when user says 'try this on', 'try on sunglasses', 'see how I look', 'upload my photo', 'virtual try-on', 'try these glasses', etc.",
+    component: withPanelRendering(VirtualTryOnUploader, "VirtualTryOnUploader"),
+    propsSchema: virtualTryOnSchema,
   },
 ];

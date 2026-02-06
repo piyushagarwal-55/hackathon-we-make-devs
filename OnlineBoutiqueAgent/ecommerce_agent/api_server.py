@@ -3,13 +3,15 @@ FastAPI server for E-commerce Agent with Tambo UI integration
 Exposes REST API endpoints for the frontend to communicate with
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import uvicorn
 import sys
 import os
+import base64
+from io import BytesIO
 
 # Add parent directory to path to fix imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -180,6 +182,122 @@ async def reset_session(session_id: str):
         return {"status": "success", "message": f"Session {session_id} reset"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/virtual-tryon")
+async def virtual_tryon(
+    user_image: UploadFile = File(...),
+    product_id: str = Form(...)
+):
+    """
+    Virtual try-on endpoint
+    Accepts user image and product ID, returns AI-generated try-on image
+    """
+    try:
+        # Import modules needed for virtual try-on
+        from ecommerce_agent.agents.virtual_tryon_agent.gemini_placer import GeminiPlacer
+        from ecommerce_agent.agents.virtual_tryon_agent.eye_detector import EyeDetector
+        import google.generativeai as genai
+        from PIL import Image
+        import requests
+        
+        # Read user image
+        user_image_bytes = await user_image.read()
+        
+        # Get product details from Cymbal Shops
+        product_url = f"https://cymbal-shops.retail.cymbal.dev/product/{product_id}"
+        response = requests.get(product_url)
+        response.raise_for_status()
+        
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(response.content, 'html.parser')
+        product_name = soup.find('h2').get_text(strip=True) if soup.find('h2') else "Product"
+        image_elem = soup.find('img', class_='product-image')
+        product_image_url = f"https://cymbal-shops.retail.cymbal.dev{image_elem['src']}" if image_elem else None
+        
+        if not product_image_url:
+            raise HTTPException(status_code=404, detail="Product image not found")
+        
+        # Get product image
+        product_response = requests.get(product_image_url)
+        product_response.raise_for_status()
+        product_image_bytes = product_response.content
+        
+        # Determine if it's eyewear
+        product_name_lower = product_name.lower()
+        is_eyewear = any(keyword in product_name_lower for keyword in ['glasses', 'sunglasses', 'eyewear'])
+        
+        # Set context hint
+        if is_eyewear:
+            context_hint = "This is eyewear (glasses/sunglasses). It should be placed on the person's face, centered on the nose bridge."
+        else:
+            context_hint = f"This is {product_name}. Place it appropriately on the person."
+        
+        # Initialize Gemini
+        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="Gemini API key not configured")
+        
+        genai.configure(api_key=api_key)
+        gemini_model = genai.GenerativeModel('models/gemini-2.5-flash')
+        placer = GeminiPlacer(gemini_model)
+        
+        # Get product dimensions
+        product_img = Image.open(BytesIO(product_image_bytes))
+        object_dimensions = product_img.size
+        
+        # For eyewear, use eye detection
+        eye_data = None
+        if is_eyewear:
+            try:
+                eye_detector = EyeDetector()
+                eye_data = eye_detector.detect_eyes(user_image_bytes)
+                print(f"✓ Eyes detected: {eye_data}" if eye_data else "✗ No eyes detected")
+            except Exception as e:
+                print(f"Eye detection failed: {e}")
+        
+        # Get placement from Gemini
+        placement = placer.get_object_placement(
+            background_image_bytes=user_image_bytes,
+            object_description=product_name,
+            context_hint=context_hint,
+            eye_data=eye_data,
+            object_dimensions=object_dimensions
+        )
+        
+        # Save product image temporarily
+        temp_product_path = f"/tmp/product_{os.getpid()}.png"
+        product_img.save(temp_product_path)
+        
+        # Overlay object
+        final_image = GeminiPlacer.overlay_object(
+            background_image_bytes=user_image_bytes,
+            object_image_bytes=temp_product_path,
+            placement=placement
+        )
+        
+        # Clean up
+        os.remove(temp_product_path)
+        
+        # Convert to base64
+        buffer = BytesIO()
+        final_image.save(buffer, 'PNG')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+        
+        return {
+            "status": "success",
+            "result_image": image_base64,
+            "product_name": product_name,
+            "method_used": "Gemini Placer with Computer Vision" if eye_data else "Gemini Placer",
+            "placement": placement
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Virtual try-on error: {e}")
+        raise HTTPException(status_code=500, detail=f"Virtual try-on failed: {str(e)}")
 
 
 if __name__ == "__main__":

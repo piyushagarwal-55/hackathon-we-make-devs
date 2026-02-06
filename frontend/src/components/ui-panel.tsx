@@ -19,6 +19,7 @@ import { LoginForm } from "@/components/tambo/ecommerce/login-form";
 import { SignupForm } from "@/components/tambo/ecommerce/signup-form";
 import { OrderHistory } from "@/components/tambo/ecommerce/order-history";
 import { UserProfile } from "@/components/tambo/ecommerce/user-profile";
+import { VirtualTryOnUploader } from "@/components/tambo/ecommerce/virtual-tryon";
 
 // Map of component names to ORIGINAL components
 const originalComponents: Record<string, React.ComponentType<any>> = {
@@ -36,6 +37,7 @@ const originalComponents: Record<string, React.ComponentType<any>> = {
   SignupForm,
   OrderHistory,
   UserProfile,
+  VirtualTryOnUploader,
 };
 
 export function UIPanel() {
