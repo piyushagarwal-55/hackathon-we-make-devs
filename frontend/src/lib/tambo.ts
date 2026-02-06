@@ -36,6 +36,7 @@ import { LoginForm, loginFormSchema } from "@/components/tambo/ecommerce/login-f
 import { SignupForm, signupFormSchema } from "@/components/tambo/ecommerce/signup-form";
 import { OrderHistory, orderHistorySchema } from "@/components/tambo/ecommerce/order-history";
 import { UserProfile, userProfileSchema } from "@/components/tambo/ecommerce/user-profile";
+import { withPanelRendering } from "@/components/wrapped-component";
 
 
 /**
@@ -727,103 +728,103 @@ export const components: TamboComponent[] = [
     component: DataCard,
     propsSchema: dataCardSchema,
   },
-  // E-commerce components for ShopSage
+  // E-commerce components for ShopSage (wrapped for panel rendering)
   {
     name: "ProductGrid",
     description:
       "Display products in a responsive grid layout with images, prices, ratings, and add-to-cart buttons. Use this for browsing, search results, or category pages.",
-    component: ProductGrid,
+    component: withPanelRendering(ProductGrid, "ProductGrid"),
     propsSchema: productGridSchema,
   },
   {
     name: "ComparisonTable",
     description:
       "Side-by-side product comparison table with features, prices, and selection buttons. Use when user wants to compare multiple products or asks 'compare them' or 'which is better'.",
-    component: ComparisonTable,
+    component: withPanelRendering(ComparisonTable, "ComparisonTable"),
     propsSchema: comparisonTableSchema,
   },
   {
     name: "BudgetSlider",
     description:
       "Interactive dual-range price slider with quick presets and product count. Use when user mentions budget, price range, 'cheap', 'affordable', or specific price constraints.",
-    component: BudgetSlider,
+    component: withPanelRendering(BudgetSlider, "BudgetSlider"),
     propsSchema: budgetSliderSchema,
   },
   {
     name: "DealBadgePanel",
     description:
       "Showcase special deals, discounts, and limited-time offers with countdown timers and savings badges. Use for deals, sales, discounts, or when user asks for best offers.",
-    component: DealBadgePanel,
+    component: withPanelRendering(DealBadgePanel, "DealBadgePanel"),
     propsSchema: dealBadgePanelSchema,
   },
   {
     name: "TryOnStudio",
     description:
       "AI-powered virtual try-on studio for apparel and accessories. Use when user wants to try on, see how something looks, or upload their photo.",
-    component: TryOnStudio,
+    component: withPanelRendering(TryOnStudio, "TryOnStudio"),
     propsSchema: tryonStudioSchema,
   },
   {
     name: "OutfitBoard",
     description:
       "Interactive outfit builder for creating complete looks by mixing and matching items from different categories. Use for outfit creation, style recommendations, or matching items.",
-    component: OutfitBoard,
+    component: withPanelRendering(OutfitBoard, "OutfitBoard"),
     propsSchema: outfitBoardSchema,
   },
   {
     name: "BundleBuilder",
     description:
       "Create product bundles with automatic discounts and savings calculator. Use when user wants to bundle items, create sets, or buy multiple related products.",
-    component: BundleBuilder,
+    component: withPanelRendering(BundleBuilder, "BundleBuilder"),
     propsSchema: bundleBuilderSchema,
   },
   {
     name: "CheckoutWizard",
     description:
       "Multi-step checkout wizard with progress tracking and express mode. Use when user is ready to checkout, buy now, or complete purchase. Set expressMode=true for fast checkout.",
-    component: CheckoutWizard,
+    component: withPanelRendering(CheckoutWizard, "CheckoutWizard"),
     propsSchema: checkoutWizardSchema,
   },
   {
     name: "SmartCartOptimizer",
     description:
       "AI-powered cart optimization with cheaper alternatives, bundle suggestions, and savings recommendations. Use when user wants to optimize cart, save money, or find better deals.",
-    component: SmartCartOptimizer,
+    component: withPanelRendering(SmartCartOptimizer, "SmartCartOptimizer"),
     propsSchema: smartCartOptimizerSchema,
   },
   {
     name: "PriceTrendChart",
     description:
       "90-day price history chart with trend analysis and deal alerts. Use when user asks about price history, trends, if it's a good deal, or when prices were lower.",
-    component: PriceTrendChart,
+    component: withPanelRendering(PriceTrendChart, "PriceTrendChart"),
     propsSchema: priceTrendChartSchema,
   },
   {
     name: "LoginForm",
     description:
       "User login form. Use when user needs to login, authenticate, or access protected features like checkout or order history.",
-    component: LoginForm,
+    component: withPanelRendering(LoginForm, "LoginForm"),
     propsSchema: loginFormSchema,
   },
   {
     name: "SignupForm",
     description:
       "User registration form. Use when user wants to create account, sign up, or register.",
-    component: SignupForm,
+    component: withPanelRendering(SignupForm, "SignupForm"),
     propsSchema: signupFormSchema,
   },
   {
     name: "OrderHistory",
     description:
       "Display user's past orders with details. Use when user wants to see order history, past purchases, or previous orders.",
-    component: OrderHistory,
+    component: withPanelRendering(OrderHistory, "OrderHistory"),
     propsSchema: orderHistorySchema,
   },
   {
     name: "UserProfile",
     description:
       "Comprehensive user profile displaying personal information, current cart items, order history, and statistics. Use when user says 'show my profile', 'view profile', 'my account', 'account details', 'profile page', etc.",
-    component: UserProfile,
+    component: withPanelRendering(UserProfile, "UserProfile"),
     propsSchema: userProfileSchema,
   },
 ];
