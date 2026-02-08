@@ -4,6 +4,7 @@ import { ProductGrid } from "@/components/tambo/ecommerce/product-grid";
 import { ComparisonTable } from "@/components/tambo/ecommerce/comparison-table";
 import { BudgetSlider } from "@/components/tambo/ecommerce/budget-slider";
 import { DealBadgePanel } from "@/components/tambo/ecommerce/deal-badge-panel";
+import { UIPanelProvider } from "@/contexts/ui-panel-context";
 
 export default function TestComponents() {
   const sampleProducts = [
@@ -84,12 +85,13 @@ export default function TestComponents() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 space-y-12">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold mb-2">E-commerce Components Test</h1>
-        <p className="text-gray-600 mb-8">
-          Testing all components without Tambo AI (while backend is down)
-        </p>
+    <UIPanelProvider>
+      <div className="min-h-screen bg-gray-50 p-8 space-y-12">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-4xl font-bold mb-2">E-commerce Components Test</h1>
+          <p className="text-gray-600 mb-8">
+            Testing all components without Tambo AI (while backend is down)
+          </p>
 
         {/* Product Grid */}
         <section className="space-y-4">
@@ -144,5 +146,6 @@ export default function TestComponents() {
         </section>
       </div>
     </div>
+    </UIPanelProvider>
   );
 }
