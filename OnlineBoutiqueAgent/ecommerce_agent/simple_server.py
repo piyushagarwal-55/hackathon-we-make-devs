@@ -9,14 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
-import uvicorn
 import sys
 import os
 import io
 import base64
 import tempfile
 from datetime import datetime
-from rembg import remove as remove_bg  # Background removal for virtual try-on
+# Lazy import for rembg to avoid slow startup - will import when needed
 
 # Add to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -1371,6 +1370,7 @@ async def virtual_tryon(
                 product_response.raise_for_status()
                 product_image_bytes = product_response.content
                 print("🔮 Removing background from product image...")
+                from rembg import remove as remove_bg  # Lazy import
                 product_image_clean = remove_bg(product_image_bytes)
                 print("✅ Background removed!")
         else:
@@ -1384,6 +1384,7 @@ async def virtual_tryon(
             product_response.raise_for_status()
             product_image_bytes = product_response.content
             print("🔮 Removing background from product image...")
+            from rembg import remove as remove_bg  # Lazy import
             product_image_clean = remove_bg(product_image_bytes)
             print("✅ Background removed!")
         
@@ -1571,17 +1572,3 @@ async def virtual_tryon(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Virtual try-on failed: {str(e)}")
-
-
-if __name__ == "__main__":
-    print("🚀 Starting Cymbal Shops E-commerce API Server...")
-    print("📍 Server: http://localhost:8000")
-    print("📖 Docs: http://localhost:8000/docs")
-    print()
-    
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8000,
-        log_level="info"
-    )
