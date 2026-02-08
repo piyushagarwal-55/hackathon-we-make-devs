@@ -4,6 +4,8 @@ import React, { useState, useRef } from "react";
 import { Upload, Camera, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import Image from "next/image";
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_AGENT_BACKEND_URL || 'http://localhost:8000';
+
 export interface VirtualTryOnProps {
   productId?: string;
   productName?: string;
@@ -81,7 +83,7 @@ export function VirtualTryOnUploader({
       formData.append("user_image", userImageFile);
       formData.append("product_id", productId);
 
-      const response = await fetch("http://localhost:8000/virtual-tryon", {
+      const response = await fetch(`${BACKEND_URL}/virtual-tryon`, {
         method: "POST",
         body: formData,
       });

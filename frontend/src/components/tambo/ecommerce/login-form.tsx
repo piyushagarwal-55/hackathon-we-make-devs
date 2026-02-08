@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { z } from "zod";
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_AGENT_BACKEND_URL || 'http://localhost:8000';
+
 export const loginFormSchema = z.object({
   message: z.string().optional(),
 }).nullable();
@@ -21,7 +23,7 @@ export function LoginForm(props: LoginFormProps) {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/auth/login", {
+      const response = await fetch(`${BACKEND_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

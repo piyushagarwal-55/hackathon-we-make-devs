@@ -5,6 +5,8 @@ import { z } from "zod";
 import Image from "next/image";
 import { Package, Calendar, CheckCircle2, Download } from "lucide-react";
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_AGENT_BACKEND_URL || 'http://localhost:8000';
+
 // Helper to validate and provide fallback for image URLs
 const getValidImageUrl = (url: string): string => {
   if (!url || url === "https://" || url === "http://" || url.length < 15) {
@@ -89,7 +91,7 @@ export function OrderHistory({ orders = [] }: OrderHistoryProps) {
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await fetch('http://localhost:8000/chat', {
+        const response = await fetch(`${BACKEND_URL}/chat`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -134,7 +136,7 @@ export function OrderHistory({ orders = [] }: OrderHistoryProps) {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/export/pdf', {
+      const response = await fetch(`${BACKEND_URL}/export/pdf`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -182,7 +184,7 @@ export function OrderHistory({ orders = [] }: OrderHistoryProps) {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/export/pdf', {
+      const response = await fetch(`${BACKEND_URL}/export/pdf`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

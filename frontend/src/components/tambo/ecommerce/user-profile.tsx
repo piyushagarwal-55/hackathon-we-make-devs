@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { z } from "zod";
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_AGENT_BACKEND_URL || 'http://localhost:8000';
+
 const cartItemSchema = z.object({
   id: z.string().default(''),
   name: z.string().default(''),
@@ -89,7 +91,7 @@ export function UserProfile(props: UserProfileProps) {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
         headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch('http://localhost:8000/chat', {
+        const response = await fetch(`${BACKEND_URL}/chat`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -174,7 +176,7 @@ export function UserProfile(props: UserProfileProps) {
         return;
       }
 
-      const response = await fetch("http://localhost:8000/profile/update", {
+      const response = await fetch(`${BACKEND_URL}/profile/update`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
