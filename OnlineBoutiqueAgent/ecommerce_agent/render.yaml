@@ -4,11 +4,15 @@ services:
     env: python
     region: oregon
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn simple_server:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: POETRY_VERSION
+        value: ""
+      - key: DISABLE_POETRY_CREATE_RUNTIME_FILE
+        value: "1"
       - key: GOOGLE_API_KEY
         sync: false
       - key: MONGODB_URI

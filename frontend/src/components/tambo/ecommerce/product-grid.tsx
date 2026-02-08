@@ -47,7 +47,7 @@ export const productGridSchema = z.object({
     })
   ).default([]),
   title: z.string().optional(),
-  columns: z.number().optional().default(3),
+  columns: z.number().optional().default(2), // Default to 2 columns
 });
 
 type ProductGridProps = z.infer<typeof productGridSchema>;
@@ -55,13 +55,10 @@ type ProductGridProps = z.infer<typeof productGridSchema>;
 export function ProductGrid({
   products = [],
   title = "Products",
-  columns = 2,
+  columns = 2, // Default to 2 columns
 }: ProductGridProps) {
-  const gridCols = {
-    2: "grid-cols-2",
-    3: "grid-cols-3",
-    4: "grid-cols-4",
-  }[columns] || "grid-cols-2";
+  // Force 2 columns for better appearance
+  const gridCols = "grid-cols-1 md:grid-cols-2";
 
   const { setComponent } = useUIPanel();
 
