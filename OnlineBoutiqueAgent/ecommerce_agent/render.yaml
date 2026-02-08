@@ -10,10 +10,6 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
-      - key: POETRY_VERSION
-        value: ""
-      - key: DISABLE_POETRY_CREATE_RUNTIME_FILE
-        value: "1"
       - key: GOOGLE_API_KEY
         sync: false
       - key: MONGODB_URI
