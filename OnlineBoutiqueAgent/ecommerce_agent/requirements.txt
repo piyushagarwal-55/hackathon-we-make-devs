@@ -1,7 +1,15 @@
-# Core dependencies - pip will install their dependencies automatically
+# Pinned versions to avoid dependency resolution issues
 google-adk==1.0.0
 google-generativeai==0.8.5
-google-genai
+google-genai==1.62.0
+
+# Pin Google dependencies to avoid backtracking
+protobuf==4.25.3
+googleapis-common-protos==1.63.0
+google-auth==2.29.0
+google-api-core==2.18.0
+grpcio==1.62.1
+grpcio-status==1.62.1
 
 mcp==1.9.1
 requests==2.32.3
@@ -12,22 +20,22 @@ python-dotenv==1.1.0
 
 flask==3.0.0
 httpx==0.28.1
-deprecated
+deprecated==1.3.1
 
-pydantic>=2.0.0
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
+pydantic==2.12.5
+fastapi==0.128.5
+uvicorn[standard]==0.40.0
 
-reportlab>=4.0.0
-pymongo>=4.6.0
-bcrypt>=4.1.0
-python-jose[cryptography]>=3.3.0
+reportlab==4.4.9
+pymongo==4.16.0
+bcrypt==5.0.0
+python-jose[cryptography]==3.5.0
 
-numpy>=1.24.0
+numpy==2.3.5
 
-# IMPORTANT — pinned versions for virtual try-on
+# Virtual try-on - pinned versions
 mediapipe==0.10.9
 opencv-python==4.13.0.92
 opencv-contrib-python==4.13.0.92
 
-rembg>=2.0.0
+rembg==2.0.72
