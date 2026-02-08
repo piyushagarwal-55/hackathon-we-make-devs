@@ -26,17 +26,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Enable CORS for frontend
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-allowed_origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    FRONTEND_URL,
-]
-
+# Enable CORS for frontend - Allow all origins for hackathon/demo
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
