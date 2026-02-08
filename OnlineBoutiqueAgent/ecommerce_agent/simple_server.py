@@ -47,9 +47,16 @@ app = FastAPI(
 )
 
 # CORS
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    FRONTEND_URL,
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -90,24 +97,6 @@ class AuthResponse(BaseModel):
     token: str
     user: Dict[str, Any]
     message: str
-
-
-app = FastAPI(
-    title="Cymbal Shops E-commerce API",
-    description="Backend API with Tambo Generative UI",
-    version="1.0.0"
-)
-
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Initialize
 ui_engine = TamboUIDecisionEngine()
 sessions: Dict[str, Dict] = {}
 
