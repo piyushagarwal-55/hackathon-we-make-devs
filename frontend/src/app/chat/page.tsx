@@ -25,7 +25,6 @@ export default function Home() {
         tools={tools}
         tamboUrl={process.env.NEXT_PUBLIC_TAMBO_URL}
         mcpServers={mcpServers}
-        agentBackendUrl={process.env.NEXT_PUBLIC_AGENT_BACKEND_URL || 'http://localhost:8000/chat'}
       >
         <div className="h-screen w-screen flex flex-col bg-gradient-to-br from-blue-50 via-white to-purple-50">
           {/* Professional Header */}

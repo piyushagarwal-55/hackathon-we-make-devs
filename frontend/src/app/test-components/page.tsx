@@ -134,11 +134,11 @@ export default function TestComponents() {
           <div className="grid grid-cols-2 gap-4">
             <div className="border rounded-lg p-4">
               <h3 className="font-medium mb-2">Empty Product Grid</h3>
-              <ProductGrid />
+              <ProductGrid products={[]} columns={3} />
             </div>
             <div className="border rounded-lg p-4">
               <h3 className="font-medium mb-2">Empty Comparison Table</h3>
-              <ComparisonTable />
+              <ComparisonTable products={[]} />
             </div>
           </div>
         </section>

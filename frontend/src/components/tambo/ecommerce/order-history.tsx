@@ -54,13 +54,18 @@ const orderSchema = z.object({
 }).nullable();
 
 export const orderHistorySchema = z.object({
-  orders: z.array(orderSchema).default([]),
-}).nullable();
+  orders: z.array(orderSchema).optional().default([]),
+});
 
 type OrderHistoryProps = z.infer<typeof orderHistorySchema>;
 
-export function OrderHistory(props: OrderHistoryProps) {
-  const [orders, setOrders] = React.useState(props?.orders || []);
+// Wrapper component that accepts any props (including empty object)
+export function OrderHistoryWrapper(props: Partial<OrderHistoryProps> = {}) {
+  return <OrderHistory orders={props.orders || []} />;
+}
+
+export function OrderHistory({ orders = [] }: OrderHistoryProps) {
+  const [ordersState, setOrders] = React.useState(orders);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -68,8 +73,8 @@ export function OrderHistory(props: OrderHistoryProps) {
   React.useEffect(() => {
     const fetchOrders = async () => {
       // Only fetch if no orders were provided in props
-      if (props?.orders && props.orders.length > 0) {
-        setOrders(props.orders);
+      if (orders && orders.length > 0) {
+        setOrders(orders);
         return;
       }
 
@@ -112,7 +117,7 @@ export function OrderHistory(props: OrderHistoryProps) {
     };
 
     fetchOrders();
-  }, [props?.orders]);
+  }, [orders]);
 
   // PDF Export functionality
   const [exportingAll, setExportingAll] = React.useState(false);
@@ -241,7 +246,7 @@ export function OrderHistory(props: OrderHistoryProps) {
     );
   }
 
-  if (orders.length === 0) {
+  if (ordersState.length === 0) {
     return (
       <div className="w-full max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-12">
         <div className="text-center space-y-4">
@@ -272,8 +277,8 @@ export function OrderHistory(props: OrderHistoryProps) {
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Order History</h2>
               <p className="text-sm text-gray-500">
-                {orders.length} order{orders.length !== 1 ? 's' : ''} • Total: $
-                {orders.reduce((sum, order) => sum + (order?.total || 0), 0).toFixed(2)}
+                {ordersState.length} order{ordersState.length !== 1 ? 's' : ''} • Total: $
+                {ordersState.reduce((sum, order) => sum + (order?.total || 0), 0).toFixed(2)}
               </p>
             </div>
           </div>
@@ -289,7 +294,7 @@ export function OrderHistory(props: OrderHistoryProps) {
       </div>
 
       {/* Orders List */}
-      {orders.map((order) => {
+      {ordersState.map((order) => {
         if (!order) return null;
 
         const totalItems = order.items.reduce(

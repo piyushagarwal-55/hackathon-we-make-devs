@@ -34,7 +34,7 @@ import { SmartCartOptimizer, smartCartOptimizerSchema } from "@/components/tambo
 import { PriceTrendChart, priceTrendChartSchema } from "@/components/tambo/ecommerce/price-trend-chart";
 import { LoginForm, loginFormSchema } from "@/components/tambo/ecommerce/login-form";
 import { SignupForm, signupFormSchema } from "@/components/tambo/ecommerce/signup-form";
-import { OrderHistory, orderHistorySchema } from "@/components/tambo/ecommerce/order-history";
+import { OrderHistoryWrapper, orderHistorySchema } from "@/components/tambo/ecommerce/order-history";
 import { UserProfile, userProfileSchema } from "@/components/tambo/ecommerce/user-profile";
 import { VirtualTryOnUploader, virtualTryOnSchema } from "@/components/tambo/ecommerce/virtual-tryon";
 import { withPanelRendering } from "@/components/wrapped-component";
@@ -818,7 +818,7 @@ export const components: TamboComponent[] = [
     name: "OrderHistory",
     description:
       "Display user's past orders with details. Use when user wants to see order history, past purchases, or previous orders.",
-    component: withPanelRendering(OrderHistory, "OrderHistory"),
+    component: withPanelRendering(OrderHistoryWrapper, "OrderHistory"),
     propsSchema: orderHistorySchema,
   },
   {

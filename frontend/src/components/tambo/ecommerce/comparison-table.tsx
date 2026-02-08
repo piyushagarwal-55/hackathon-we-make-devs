@@ -50,10 +50,10 @@ export function ComparisonTable({
 }: ComparisonTableProps) {
   // Get all unique feature keys from the array-based structure
   const allFeatures = Array.from(
-    new Set(products.flatMap((p) => p.features.map((f) => f.key)))
+    new Set((products || []).flatMap((p) => (p.features || []).map((f) => f.key || "")))
   );
 
-  const renderFeatureValue = (value: string | boolean | number | undefined) => {
+  const renderFeatureValue = (value: string | boolean | number | null | undefined) => {
     if (value === undefined || value === null) {
       return <span className="text-gray-400">-</span>;
     }
@@ -80,22 +80,22 @@ export function ComparisonTable({
               <th className="p-4 text-left font-semibold text-gray-700 border-b">
                 Feature
               </th>
-              {products.map((product) => (
+              {(products || []).map((product) => (
                 <th key={product.id} className="p-4 border-b">
                   <div className="flex flex-col items-center gap-3">
                     <div className="relative w-24 h-24">
                       <Image
-                        src={getValidImageUrl(product.image)}
-                        alt={product.name}
+                        src={getValidImageUrl(product.image || "")}
+                        alt={product.name || "Product"}
                         fill
                         className="object-cover rounded-lg"
                       />
                     </div>
                     <div className="text-sm font-semibold text-gray-900 text-center">
-                      {product.name}
+                      {product.name || "Product"}
                     </div>
                     <div className="text-lg font-bold text-blue-600">
-                      ${product.price.toFixed(2)}
+                      ${(product.price || 0).toFixed(2)}
                     </div>
                   </div>
                 </th>
@@ -109,10 +109,10 @@ export function ComparisonTable({
                 className={idx % 2 === 0 ? "bg-gray-50" : "bg-white"}
               >
                 <td className="p-4 font-medium text-gray-700 border-b capitalize">
-                  {feature.replace(/([A-Z])/g, " $1").trim()}
+                  {(feature || "").replace(/([A-Z])/g, " $1").trim()}
                 </td>
-                {products.map((product) => {
-                  const featureObj = product.features.find((f) => f.key === feature);
+                {(products || []).map((product) => {
+                  const featureObj = (product.features || []).find((f) => f.key === feature);
                   return (
                     <td
                       key={product.id}
@@ -126,7 +126,7 @@ export function ComparisonTable({
             ))}
             <tr className="bg-blue-50">
               <td className="p-4 font-semibold text-gray-700">Action</td>
-              {products.map((product) => (
+              {(products || []).map((product) => (
                 <td key={product.id} className="p-4 text-center">
                   <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 mx-auto">
                     <ShoppingCart className="w-4 h-4" />

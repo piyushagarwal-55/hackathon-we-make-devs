@@ -9,7 +9,8 @@ import { useUIPanel } from "@/contexts/ui-panel-context";
  * Listens to Tambo messages and extracts UI components to display in the right panel
  */
 export function ComponentInterceptor() {
-  const { messages } = useTambo(); // ✅ replaces useThread
+  const { thread } = useTambo();
+  const messages = thread?.messages || [];
   const { setComponent } = useUIPanel();
   const lastProcessedRef = useRef<number>(-1);
 
@@ -63,7 +64,7 @@ export function ComponentInterceptor() {
       
       const componentBlock = content.find(
         (block: any) => block.type === "component" || (block.component && block.props)
-      );
+      ) as any;
 
       if (componentBlock) {
         const componentName = componentBlock.component || componentBlock.name;
@@ -85,9 +86,10 @@ export function ComponentInterceptor() {
       console.log('🔷 [ComponentInterceptor] Has component?', !!(content as any).component);
       console.log('🔷 [ComponentInterceptor] Has name?', !!(content as any).name);
       
-      if ((content as any).component || (content as any).name) {
-        const componentName = (content as any).component || (content as any).name;
-        const componentProps = (content as any).props || (content as any).data || {};
+      const contentObj = content as any;
+      if (contentObj.component || contentObj.name) {
+        const componentName = contentObj.component || contentObj.name;
+        const componentProps = contentObj.props || contentObj.data || {};
 
         console.log("✅ [ComponentInterceptor] Found component (object):", componentName);
         console.log("✅ [ComponentInterceptor] Component props:", componentProps);

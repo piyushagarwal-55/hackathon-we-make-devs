@@ -55,13 +55,13 @@ type ProductGridProps = z.infer<typeof productGridSchema>;
 export function ProductGrid({
   products = [],
   title = "Products",
-  columns = 3,
+  columns = 2,
 }: ProductGridProps) {
   const gridCols = {
     2: "grid-cols-2",
     3: "grid-cols-3",
     4: "grid-cols-4",
-  }[columns] || "grid-cols-3";
+  }[columns] || "grid-cols-2";
 
   const { setComponent } = useUIPanel();
 
@@ -97,9 +97,9 @@ export function ProductGrid({
     });
   };
 
-  // Check if product is suitable for virtual try-on
+  // Check if product is suitable for virtual try-on (ONLY sunglasses/eyewear)
   const canTryOn = (product: any): boolean => {
-    const tryOnKeywords = ['sunglasses', 'glasses', 'eyewear', 'hat', 'cap', 'watch', 'jewelry', 'necklace', 'earring', 'bracelet'];
+    const tryOnKeywords = ['sunglasses', 'glasses', 'eyewear'];
     const nameAndCategory = `${product.name} ${product.category || ''}`.toLowerCase();
     return tryOnKeywords.some(keyword => nameAndCategory.includes(keyword));
   };
@@ -107,14 +107,14 @@ export function ProductGrid({
   return (
     <div className="w-full space-y-6 p-4">
       <div className="flex items-center gap-3">
-        <div className="h-10 w-1 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full"></div>
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">{title}</h2>
+        <div className="h-10 w-1 bg-gradient-to-b from-slate-700 to-slate-900 rounded-full"></div>
+        <h2 className="text-3xl font-bold text-gray-900">{title}</h2>
       </div>
       <div className={`grid ${gridCols} gap-6`}>
         {products.map((product) => (
           <div
             key={product.id}
-            className="group border border-gray-200 rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 bg-white hover:-translate-y-1"
+            className="group border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 bg-white hover:-translate-y-1"
           >
             <div className="relative h-56 bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
               <Image
@@ -130,11 +130,11 @@ export function ProductGrid({
               )}
             </div>
             <div className="p-5 space-y-3">
-              <h3 className="font-bold text-gray-900 line-clamp-2 text-lg group-hover:text-blue-600 transition-colors">
+              <h3 className="font-semibold text-gray-900 line-clamp-2 text-lg group-hover:text-slate-700 transition-colors">
                 {product.name}
               </h3>
               {product.category && (
-                <span className="inline-block px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">{product.category}</span>
+                <span className="inline-block px-2 py-1 text-xs font-medium bg-slate-100 text-slate-700 rounded-full">{product.category}</span>
               )}
               {product.rating && (
                 <div className="flex items-center gap-1">
@@ -145,14 +145,14 @@ export function ProductGrid({
               )}
               <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                 <div>
-                  <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  <span className="text-2xl font-bold text-slate-900">
                     ${product.price.toFixed(2)}
                   </span>
                 </div>
                 <div className="flex gap-2">
                   {canTryOn(product) && (
                     <button
-                      className="px-3 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 flex items-center gap-2 shadow-md hover:shadow-lg transition-all font-medium"
+                      className="px-3 py-2.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 active:bg-slate-950 flex items-center gap-2 shadow-sm hover:shadow-md transition-all duration-200 font-medium transform hover:scale-105 active:scale-95"
                       onClick={() => handleTryOn(product)}
                       title="Virtual Try-On"
                     >
@@ -161,7 +161,7 @@ export function ProductGrid({
                     </button>
                   )}
                   <button
-                    className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 flex items-center gap-2 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all font-medium"
+                    className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 flex items-center gap-2 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-sm hover:shadow-md transition-all duration-200 font-medium transform hover:scale-105 active:scale-95"
                     disabled={product.inStock === false}
                     onClick={() => handleAddToCart(product)}
                   >

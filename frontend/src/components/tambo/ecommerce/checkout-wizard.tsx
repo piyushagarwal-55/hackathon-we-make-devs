@@ -66,10 +66,10 @@ export function CheckoutWizard({
   ];
 
   const subtotal = cartItems.reduce(
-    (sum, item) => sum + item.price * item.quantity,
+    (sum, item) => sum + (item.price || 0) * (item.quantity || 1),
     0
   );
-  const shipping = expressMode ? 0 : shippingCost;
+  const shipping = expressMode ? 0 : (shippingCost || 0);
   const total = subtotal + shipping;
 
   const handlePlaceOrder = () => {
@@ -167,18 +167,18 @@ export function CheckoutWizard({
                 >
                   <div className="relative w-20 h-20">
                     <Image
-                      src={getValidImageUrl(item.image)}
-                      alt={item.name}
+                      src={getValidImageUrl(item.image || "")}
+                      alt={item.name || "Item"}
                       fill
                       className="object-cover rounded"
                     />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{item.name}</p>
-                    <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
+                    <p className="font-semibold text-gray-900">{item.name || "Item"}</p>
+                    <p className="text-sm text-gray-500">Qty: {item.quantity || 1}</p>
                   </div>
                   <p className="font-bold text-gray-900">
-                    ${(item.price * item.quantity).toFixed(2)}
+                    ${((item.price || 0) * (item.quantity || 1)).toFixed(2)}
                   </p>
                 </div>
               ))}

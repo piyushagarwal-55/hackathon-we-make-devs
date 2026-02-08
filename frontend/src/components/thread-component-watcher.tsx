@@ -10,21 +10,20 @@ import { useUIPanel } from "@/contexts/ui-panel-context";
  */
 export function ThreadComponentWatcher() {
   const tambo = useTambo();
+  const messages = tambo?.thread?.messages || [];
   const { setComponent } = useUIPanel();
   const lastProcessedRef = useRef<number>(-1);
 
   useEffect(() => {
     console.log('🔄 [ThreadComponentWatcher] Effect triggered');
     console.log('📊 [ThreadComponentWatcher] Tambo object:', tambo);
-    console.log('📊 [ThreadComponentWatcher] Tambo.messages:', tambo?.messages);
-    console.log('📊 [ThreadComponentWatcher] Total messages:', tambo?.messages?.length || 0);
+    console.log('📊 [ThreadComponentWatcher] Tambo.thread:', tambo?.thread);
+    console.log('📊 [ThreadComponentWatcher] Total messages:', messages.length);
     
-    if (!tambo?.messages?.length) {
+    if (!messages.length) {
       console.log('⚠️ [ThreadComponentWatcher] No messages found, exiting');
       return;
     }
-
-    const messages = tambo.messages;
     const currentIndex = messages.length - 1;
     const lastMessage = messages[currentIndex];
     
@@ -58,7 +57,7 @@ export function ThreadComponentWatcher() {
       // Find component block
       const componentBlock = content.find(
         (block: any) => block.type === "component" || block.component
-      );
+      ) as any;
 
       if (componentBlock) {
         const componentName = componentBlock.component || componentBlock.name;
@@ -78,9 +77,10 @@ export function ThreadComponentWatcher() {
     } else if (typeof content === 'object' && content !== null) {
       console.log('📦 [ThreadComponentWatcher] Content is object:', content);
       
-      if (content.component || content.name) {
-        const componentName = content.component || content.name;
-        const componentProps = content.props || {};
+      const contentObj = content as any;
+      if (contentObj.component || contentObj.name) {
+        const componentName = contentObj.component || contentObj.name;
+        const componentProps = contentObj.props || {};
         
         console.log("✅ [ThreadComponentWatcher] FOUND COMPONENT (object)!");
         console.log("🎨 Component name:", componentName);
@@ -92,7 +92,7 @@ export function ThreadComponentWatcher() {
     } else {
       console.log('📝 [ThreadComponentWatcher] Content is text only:', content);
     }
-  }, [tambo?.messages, setComponent]);
+  }, [messages, setComponent]);
 
   return null;
 }
