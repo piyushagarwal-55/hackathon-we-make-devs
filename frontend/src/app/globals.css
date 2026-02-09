@@ -191,3 +191,30 @@ Animated gradient for thinking text, creates a shimmering effect that moves acro
   transform: translateX(2px);
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
 }
+
+/* Landing page animations */
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.05;
+  }
+  50% {
+    opacity: 0.08;
+  }
+}
+
+@keyframes glow-subtle {
+  0%, 100% {
+    opacity: 0.02;
+  }
+  50% {
+    opacity: 0.04;
+  }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 4s ease-in-out infinite;
+}
+
+.animate-glow-subtle {
+  animation: glow-subtle 6s ease-in-out infinite;
+}
